@@ -11,6 +11,8 @@ import MasteringSuite from './components/MasteringSuite';
 import AudioAnalyzer from './components/AudioAnalyzer';
 import RecordingStudio from './components/RecordingStudio';
 import ExportCenter from './components/ExportCenter';
+import QuickFXModal from './components/QuickFXModal';
+import QuickFXBanner from './components/QuickFXBanner';
 import { audioEngine } from './audio/WebAudioEngine';
 import { apiUrl, safeFetchJson, resolveAudioUrl, getApiBase, setApiBaseOverride } from './config/api';
 
@@ -23,6 +25,9 @@ export default function App() {
   const [bpm, setBpm] = useState(120);
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [quickFXTrack, setQuickFXTrack] = useState(null);
+  const [isQuickFXOpen, setIsQuickFXOpen] = useState(false);
+  const [showQuickBanner, setShowQuickBanner] = useState(true);
 
   // Auto-load demo project on initial mount so user has immediate playable audio
   useEffect(() => {
@@ -114,9 +119,86 @@ export default function App() {
       setTracks(prev => [...prev, newTrack]);
       setActiveTrackId(newTrack.id);
       setActiveFile({ file_path: data.file_path });
+      setQuickFXTrack(newTrack);
+      setShowQuickBanner(true);
+      setIsQuickFXOpen(true);
       await audioEngine.loadTrackAudio(newTrack.id, resolveAudioUrl(data.download_url));
     } catch (e) {
       alert(`Upload error: ${e.message}`);
+    }
+  };
+
+  const handleApplyEffect = async (trackId, updatedData, mode = 'replace') => {
+    if (mode === 'replace') {
+      setTracks(prev => prev.map(t => {
+        if (t.id === trackId) {
+          return {
+            ...t,
+            name: updatedData.name || t.name,
+            file_path: updatedData.file_path,
+            download_url: updatedData.download_url
+          };
+        }
+        return t;
+      }));
+      if (activeTrackId === trackId) {
+        setActiveFile({ file_path: updatedData.file_path });
+      }
+      if (updatedData.download_url) {
+        await audioEngine.loadTrackAudio(trackId, resolveAudioUrl(updatedData.download_url));
+      }
+    } else {
+      const newId = `Track_FX_${Date.now()}`;
+      const newTrack = {
+        id: newId,
+        name: updatedData.name || `Track (FX)`,
+        category: 'Processed',
+        color: '#10b981',
+        file_path: updatedData.file_path,
+        download_url: updatedData.download_url,
+        volume_db: '0.0 dB',
+        volume: 1.0,
+        pan: 0.0,
+        mute: false,
+        solo: false,
+        waveform: Array.from({ length: 60 }).map(() => Math.random() * 0.8 + 0.1)
+      };
+      setTracks(prev => [...prev, newTrack]);
+      setActiveTrackId(newId);
+      setActiveFile({ file_path: updatedData.file_path });
+      if (updatedData.download_url) {
+        await audioEngine.loadTrackAudio(newId, resolveAudioUrl(updatedData.download_url));
+      }
+    }
+  };
+
+  const handleAddStemTracks = async (stemsList) => {
+    const stemColors = {
+      vocals: '#ec4899',
+      drums: '#f59e0b',
+      bass: '#8b5cf6',
+      other: '#06b6d4'
+    };
+    for (const st of stemsList) {
+      const stemId = `Stem_${st.stem_name}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      const newTrack = {
+        id: stemId,
+        name: `Stem: ${st.stem_name.toUpperCase()}`,
+        category: 'Stem',
+        color: stemColors[st.stem_name] || '#10b981',
+        file_path: st.file_path,
+        download_url: st.download_url,
+        volume_db: '0.0 dB',
+        volume: 1.0,
+        pan: 0.0,
+        mute: false,
+        solo: false,
+        waveform: Array.from({ length: 60 }).map(() => Math.random() * 0.8 + 0.1)
+      };
+      setTracks(prev => [...prev, newTrack]);
+      if (st.download_url) {
+        await audioEngine.loadTrackAudio(stemId, resolveAudioUrl(st.download_url));
+      }
     }
   };
 
@@ -155,18 +237,39 @@ export default function App() {
       {/* Main View Area */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {activeTab === 'studio' && (
-          <DAWTimeline
-            tracks={tracks}
-            onUpdateTrack={handleUpdateTrack}
-            onAddTrack={handleAddTrack}
-            onUploadFile={handleUploadFile}
-            activeTrackId={activeTrackId}
-            setActiveTrackId={(id) => {
-              setActiveTrackId(id);
-              const found = tracks.find(t => t.id === id);
-              if (found) setActiveFile({ file_path: found.file_path });
-            }}
-          />
+          <>
+            {showQuickBanner && tracks.length > 0 && (
+              <QuickFXBanner
+                track={tracks.find(t => t.id === activeTrackId) || tracks[0]}
+                onOpenQuickFX={() => {
+                  const sel = tracks.find(t => t.id === activeTrackId) || tracks[0];
+                  if (sel) {
+                    setQuickFXTrack(sel);
+                    setIsQuickFXOpen(true);
+                  }
+                }}
+                onApplyEffect={handleApplyEffect}
+                onAddStemTracks={handleAddStemTracks}
+                onDismiss={() => setShowQuickBanner(false)}
+              />
+            )}
+            <DAWTimeline
+              tracks={tracks}
+              onUpdateTrack={handleUpdateTrack}
+              onAddTrack={handleAddTrack}
+              onUploadFile={handleUploadFile}
+              activeTrackId={activeTrackId}
+              setActiveTrackId={(id) => {
+                setActiveTrackId(id);
+                const found = tracks.find(t => t.id === id);
+                if (found) setActiveFile({ file_path: found.file_path });
+              }}
+              onOpenQuickFX={(trackToFX) => {
+                setQuickFXTrack(trackToFX);
+                setIsQuickFXOpen(true);
+              }}
+            />
+          </>
         )}
 
         {activeTab === 'mixer' && (
@@ -242,6 +345,16 @@ export default function App() {
         setBpm={setBpm}
         onLoadDemo={handleLoadDemo}
         loadingDemo={loadingDemo}
+      />
+
+      {/* Instant Effects & Mastering Assistant Modal */}
+      <QuickFXModal
+        isOpen={isQuickFXOpen}
+        onClose={() => setIsQuickFXOpen(false)}
+        track={quickFXTrack || tracks.find(t => t.id === activeTrackId) || tracks[0]}
+        onApplyEffect={handleApplyEffect}
+        onAddStemTracks={handleAddStemTracks}
+        onNavigateTab={(tab) => setActiveTab(tab)}
       />
     </div>
   );

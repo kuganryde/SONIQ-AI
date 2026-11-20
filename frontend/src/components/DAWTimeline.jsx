@@ -9,7 +9,8 @@ import {
   Scissors, 
   Music,
   Sliders,
-  Play
+  Play,
+  Zap
 } from 'lucide-react';
 import { audioEngine } from '../audio/WebAudioEngine';
 
@@ -19,7 +20,8 @@ export default function DAWTimeline({
   onAddTrack,
   onUploadFile,
   activeTrackId,
-  setActiveTrackId
+  setActiveTrackId,
+  onOpenQuickFX
 }) {
   const [zoomLevel, setZoomLevel] = useState(1.0);
   const fileInputRef = useRef(null);
@@ -46,6 +48,19 @@ export default function DAWTimeline({
         </div>
 
         <div className="flex items-center space-x-2">
+          {tracks.length > 0 && onOpenQuickFX && (
+            <button
+              onClick={() => {
+                const sel = tracks.find(t => t.id === activeTrackId) || tracks[0];
+                if (sel) onOpenQuickFX(sel);
+              }}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500/20 to-blue-600/20 hover:from-cyan-500/30 hover:to-blue-600/30 text-cyan-300 border border-cyan-500/40 transition-colors font-bold"
+            >
+              <Zap className="w-3.5 h-3.5 text-cyan-400" />
+              <span>1-Click Quick FX</span>
+            </button>
+          )}
+
           <input
             type="file"
             ref={fileInputRef}
@@ -168,6 +183,20 @@ export default function DAWTimeline({
                       >
                         <Circle className="w-3 h-3 fill-rose-600/40" />
                       </button>
+
+                      {onOpenQuickFX && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenQuickFX(track);
+                          }}
+                          className="flex items-center space-x-1 px-2 py-0.5 text-[10px] font-bold rounded bg-cyan-950 text-cyan-300 border border-cyan-700 hover:bg-cyan-900 transition-colors ml-auto"
+                          title="Instant Effects & Mastering"
+                        >
+                          <Zap className="w-2.5 h-2.5 text-cyan-400" />
+                          <span>FX</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 

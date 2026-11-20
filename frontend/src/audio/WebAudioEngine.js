@@ -38,12 +38,13 @@ class WebAudioEngine {
       const arrayBuf = await resp.arrayBuffer();
       const audioBuf = await this.ctx.decodeAudioData(arrayBuf);
       
+      const existing = this.tracks.get(trackId);
       this.tracks.set(trackId, {
         buffer: audioBuf,
-        volume: 1.0,
-        pan: 0.0,
-        mute: false,
-        solo: false,
+        volume: existing ? existing.volume : 1.0,
+        pan: existing ? existing.pan : 0.0,
+        mute: existing ? existing.mute : false,
+        solo: existing ? existing.solo : false,
         source: null,
         gainNode: null,
         panNode: null
