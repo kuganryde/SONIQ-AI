@@ -1,0 +1,17 @@
+venv/
+node_modules/
+frontend/node_modules/
+frontend/dist/
+backend/storage/uploads/*
+!backend/storage/uploads/.gitkeep
+backend/storage/processed/*
+!backend/storage/processed/.gitkeep
+backend/storage/stems/*
+!backend/storage/stems/.gitkeep
+backend/storage/exports/*
+!backend/storage/exports/.gitkeep
+backend/storage/synths/*
+!backend/storage/synths/.gitkeep
+__pycache__/
+*.pyc
+.DS_Store
