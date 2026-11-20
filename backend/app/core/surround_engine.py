@@ -234,3 +234,73 @@ class SurroundPannerEngine:
             stereo /= peak
 
         return stereo
+
+    @classmethod
+    def render_binaural_hrtf(
+        cls,
+        surround_audio: np.ndarray,
+        layout: str = SurroundLayout.FIVE_POINT_ONE,
+        sample_rate: int = 48000
+    ) -> np.ndarray:
+        """
+        Synthesizes an accurate 3D Binaural Headphone render from multichannel surround/height audio
+        using acoustic Head-Related Transfer Function physics (ITD, ILD, pinna cues).
+        Enables 5.1, 7.1, and 7.1.4 Atmos monitoring on standard stereo headphones.
+        """
+        ch_count, num_samples = surround_audio.shape
+        speakers = SPEAKER_CONFIGS.get(layout, SPEAKER_CONFIGS[SurroundLayout.FIVE_POINT_ONE])
+        
+        binaural = np.zeros((2, num_samples), dtype=np.float64)
+        head_radius = 0.0875  # ~8.75 cm human ear distance from center
+        c = 343.0  # speed of sound m/s
+
+        # Acoustic shadow lowpass filter for contralateral (shadowed) ear
+        sos_shadow = scipy.signal.iirfilter(2, 2800 / (sample_rate / 2), btype='lowpass', ftype='butter', output='sos')
+        # Pinna elevation notch for height channels
+        b_not, a_not = scipy.signal.iirnotch(7500 / (sample_rate / 2), 2.0)
+
+        for i, spk in enumerate(speakers):
+            if i >= ch_count:
+                break
+            ch_sig = surround_audio[i]
+            if np.max(np.abs(ch_sig)) < 1e-6:
+                continue
+
+            pos = np.array(spk["pos"])
+            # Ear coordinates in 3D (x, y, z)
+            ear_l = np.array([-head_radius, 0.0, 0.0])
+            ear_r = np.array([head_radius, 0.0, 0.0])
+
+            d_l = np.linalg.norm(pos - ear_l)
+            d_r = np.linalg.norm(pos - ear_r)
+
+            # Interaural Time Difference (ITD) in fractional samples
+            delay_l_s = int(round((d_l / c) * sample_rate * 0.01))
+            delay_r_s = int(round((d_r / c) * sample_rate * 0.01))
+
+            sig_l = np.roll(ch_sig, delay_l_s)
+            sig_r = np.roll(ch_sig, delay_r_s)
+
+            # Interaural Level Difference (ILD)
+            if pos[0] > 0.15:
+                sig_l = scipy.signal.sosfilt(sos_shadow, sig_l) * 0.75
+            elif pos[0] < -0.15:
+                sig_r = scipy.signal.sosfilt(sos_shadow, sig_r) * 0.75
+
+            # Elevation pinna cue for height channels
+            if pos[2] > 0.4:
+                sig_l = scipy.signal.lfilter(b_not, a_not, sig_l)
+                sig_r = scipy.signal.lfilter(b_not, a_not, sig_r)
+
+            # Distance attenuation
+            dist_l = max(0.5, d_l)
+            dist_r = max(0.5, d_r)
+            binaural[0] += sig_l / dist_l
+            binaural[1] += sig_r / dist_r
+
+        # Normalization
+        peak = np.max(np.abs(binaural))
+        if peak > 0.001:
+            binaural = (binaural / peak) * 0.92
+
+        return binaural

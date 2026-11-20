@@ -266,13 +266,16 @@ async def master_audio(req: MasteringProcessRequest):
 
 @app.post("/api/v1/audio/surround")
 async def surround_process(req: SurroundProcessRequest):
-    """Agent 08: 5.1 / 7.1 Spatial Panning & LFE Bass Management."""
+    """Agent 08: 5.1 / 7.1 / 7.1.4 3D Spatial Panning, LFE Bass Management & Binaural HRTF."""
     if not Path(req.file_path).exists():
         raise HTTPException(status_code=404, detail="File not found")
     return await surround_agent.create_surround_mix(
         req.file_path,
         target_layout=req.layout,
-        crossover_hz=req.crossover_hz
+        crossover_hz=req.crossover_hz,
+        x=req.x,
+        y=req.y,
+        z=req.z
     )
 
 

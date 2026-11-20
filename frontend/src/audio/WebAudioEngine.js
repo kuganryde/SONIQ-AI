@@ -11,6 +11,9 @@ class WebAudioEngine {
     this.pauseOffset = 0;
     this.mediaRecorder = null;
     this.recordedChunks = [];
+    this.isBinauralMode = false;
+    this.spatialPos = { x: 0.0, y: 0.4, z: 0.0 };
+    this.spatialPannerNode = null;
   }
 
   init() {
@@ -22,11 +25,67 @@ class WebAudioEngine {
       this.analyser.fftSize = 2048;
       this.analyser.smoothingTimeConstant = 0.85;
 
+      // 3D Binaural HRTF Spatializer Node
+      try {
+        this.spatialPannerNode = this.ctx.createPanner();
+        this.spatialPannerNode.panningModel = 'HRTF';
+        this.spatialPannerNode.distanceModel = 'inverse';
+        this.spatialPannerNode.refDistance = 1.0;
+        this.spatialPannerNode.maxDistance = 1000.0;
+        this.spatialPannerNode.rolloffFactor = 0.8;
+        this.spatialPannerNode.coneInnerAngle = 360;
+
+        // Set listener orientation at origin looking forward
+        if (this.ctx.listener.forwardX) {
+          this.ctx.listener.forwardX.setValueAtTime(0, this.ctx.currentTime);
+          this.ctx.listener.forwardY.setValueAtTime(0, this.ctx.currentTime);
+          this.ctx.listener.forwardZ.setValueAtTime(-1, this.ctx.currentTime);
+          this.ctx.listener.upX.setValueAtTime(0, this.ctx.currentTime);
+          this.ctx.listener.upY.setValueAtTime(1, this.ctx.currentTime);
+          this.ctx.listener.upZ.setValueAtTime(0, this.ctx.currentTime);
+        } else if (this.ctx.listener.setOrientation) {
+          this.ctx.listener.setOrientation(0, 0, -1, 0, 1, 0);
+        }
+      } catch (err) {
+        console.warn("HRTF Panner initialization fallback:", err);
+      }
+
       this.masterGain.connect(this.analyser);
       this.analyser.connect(this.ctx.destination);
     }
     if (this.ctx.state === 'suspended') {
       this.ctx.resume();
+    }
+  }
+
+  setBinauralSpatialPosition(x, y, z = 0.0) {
+    this.init();
+    this.spatialPos = { x, y, z };
+    if (!this.ctx || !this.spatialPannerNode) return;
+    
+    // Scale normalised (-1 to +1) studio coords to 3D room meters (radius ~3m)
+    // Web Audio standard: +X is right, +Y is up, -Z is front
+    const px = x * 2.8;
+    const py = z * 2.2;
+    const pz = -y * 2.8;
+    const t = this.ctx.currentTime;
+
+    try {
+      if (this.spatialPannerNode.positionX) {
+        this.spatialPannerNode.positionX.setTargetAtTime(px, t, 0.02);
+        this.spatialPannerNode.positionY.setTargetAtTime(py, t, 0.02);
+        this.spatialPannerNode.positionZ.setTargetAtTime(pz, t, 0.02);
+      } else if (this.spatialPannerNode.setPosition) {
+        this.spatialPannerNode.setPosition(px, py, pz);
+      }
+    } catch (_) {}
+  }
+
+  setBinauralMode(enabled) {
+    this.isBinauralMode = !!enabled;
+    if (this.isPlaying) {
+      const curOffset = this.ctx.currentTime - this.startTime;
+      this.playAll(curOffset);
     }
   }
 
@@ -87,7 +146,15 @@ class WebAudioEngine {
         source.connect(gainNode);
       }
 
-      gainNode.connect(this.masterGain);
+      if (this.isBinauralMode && this.spatialPannerNode) {
+        gainNode.connect(this.spatialPannerNode);
+        try {
+          this.spatialPannerNode.disconnect();
+        } catch (_) {}
+        this.spatialPannerNode.connect(this.masterGain);
+      } else {
+        gainNode.connect(this.masterGain);
+      }
 
       const trackOffset = Math.min(offset, track.buffer.duration);
       source.start(0, trackOffset);
