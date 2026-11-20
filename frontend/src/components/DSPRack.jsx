@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { apiUrl, safeFetchJson, resolveAudioUrl } from '../config/api';
 import { Cpu, Sliders, Activity, Disc, Wand2, Check, Download } from 'lucide-react';
 
 export default function DSPRack({
@@ -110,12 +111,11 @@ export default function DSPRack({
         { type: 'widener', width_pct: widenerWidth }
       ];
 
-      const resp = await fetch('/api/v1/dsp/process', {
+      const data = await safeFetchJson(apiUrl('/api/v1/dsp/process'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ file_path: fileToUse, operations })
       });
-      const data = await resp.json();
       setDspResult(data);
     } catch (e) {
       alert(`DSP error: ${e.message}`);
@@ -318,7 +318,7 @@ export default function DSPRack({
             </div>
           </div>
           <a
-            href={dspResult.download_url}
+            href={resolveAudioUrl(dspResult.download_url)}
             download
             className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold transition-colors"
           >

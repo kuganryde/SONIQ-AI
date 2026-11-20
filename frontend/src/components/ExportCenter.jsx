@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiUrl, safeFetchJson, resolveAudioUrl } from '../config/api';
 import { DownloadCloud, ShieldCheck, AlertTriangle, FileText, Download, CheckCircle2 } from 'lucide-react';
 
 export default function ExportCenter({
@@ -21,7 +22,7 @@ export default function ExportCenter({
 
     setExporting(true);
     try {
-      const resp = await fetch('/api/v1/export/render', {
+      const data = await safeFetchJson(apiUrl('/api/v1/export/render'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -34,7 +35,6 @@ export default function ExportCenter({
           channels_layout: channelLayout
         })
       });
-      const data = await resp.json();
       setExportCertificate(data);
     } catch (e) {
       alert(`Export error: ${e.message}`);
@@ -150,7 +150,7 @@ export default function ExportCenter({
 
             <div className="flex items-center space-x-3">
               <a
-                href={exportCertificate.download_path}
+                href={resolveAudioUrl(exportCertificate.download_path)}
                 download
                 className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold transition-colors shadow-lg shadow-emerald-900/30"
               >

@@ -1,3 +1,5 @@
+import { resolveAudioUrl } from '../config/api';
+
 class WebAudioEngine {
   constructor() {
     this.ctx = null;
@@ -31,7 +33,8 @@ class WebAudioEngine {
   async loadTrackAudio(trackId, url) {
     this.init();
     try {
-      const resp = await fetch(url);
+      const targetUrl = resolveAudioUrl(url);
+      const resp = await fetch(targetUrl);
       const arrayBuf = await resp.arrayBuffer();
       const audioBuf = await this.ctx.decodeAudioData(arrayBuf);
       

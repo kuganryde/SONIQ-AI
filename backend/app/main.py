@@ -182,6 +182,7 @@ async def upload_audio(file: UploadFile = File(...)):
 
 
 @app.get("/api/v1/audio/download/{filename}")
+@app.head("/api/v1/audio/download/{filename}")
 async def download_audio(filename: str):
     """Direct non-destructive download of uploaded, processed, or exported audio files."""
     for folder in [settings.EXPORTS_DIR, settings.PROCESSED_DIR, settings.STEMS_DIR, settings.UPLOAD_DIR, settings.SYNTHS_DIR]:
@@ -408,6 +409,7 @@ async def render_export(req: ExportRenderRequest):
     return cert
 
 
+@app.head("/api/v1/projects/demo")
 @app.get("/api/v1/projects/demo")
 async def load_demo_project():
     """Generates an immediate, playable studio demonstration project with real multitracks."""

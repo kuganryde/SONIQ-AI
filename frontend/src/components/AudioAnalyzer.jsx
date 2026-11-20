@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { apiUrl, safeFetchJson } from '../config/api';
 import { Activity, ShieldCheck, AlertCircle, BarChart3 } from 'lucide-react';
 import { audioEngine } from '../audio/WebAudioEngine';
 
@@ -21,11 +22,10 @@ export default function AudioAnalyzer({
     try {
       const formData = new FormData();
       formData.append('file_path', fileToUse);
-      const resp = await fetch('/api/v1/audio/analyze', {
+      const data = await safeFetchJson(apiUrl('/api/v1/audio/analyze'), {
         method: 'POST',
         body: formData
       });
-      const data = await resp.json();
       setAnalysisData(data);
     } catch (e) {
       alert(`Analysis error: ${e.message}`);

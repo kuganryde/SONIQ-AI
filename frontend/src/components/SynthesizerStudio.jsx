@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiUrl, safeFetchJson, resolveAudioUrl } from '../config/api';
 import { Piano, Disc, Sparkles, Download, Volume2, Play } from 'lucide-react';
 
 export default function SynthesizerStudio({
@@ -74,12 +75,11 @@ export default function SynthesizerStudio({
         };
       }
 
-      const resp = await fetch('/api/v1/synth/generate', {
+      const data = await safeFetchJson(apiUrl('/api/v1/synth/generate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await resp.json();
       setSynthResult(data);
 
       if (onAddTrackFromAudio) {
@@ -315,7 +315,7 @@ export default function SynthesizerStudio({
             </div>
           </div>
           <a
-            href={synthResult.download_url}
+            href={resolveAudioUrl(synthResult.download_url)}
             download
             className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-mono text-xs font-bold transition-colors"
           >

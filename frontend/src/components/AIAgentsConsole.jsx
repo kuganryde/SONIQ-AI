@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiUrl, safeFetchJson, resolveAudioUrl } from '../config/api';
 import { 
   Bot, 
   Send, 
@@ -48,12 +49,11 @@ export default function AIAgentsConsole({
     setLoading(true);
     setStatusMessage("Agent 10: Formulating Autonomous Multi-Agent Production Plan...");
     try {
-      const resp = await fetch('/api/v1/audio/orchestrate', {
+      const data = await safeFetchJson(apiUrl('/api/v1/audio/orchestrate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: textToRun, file_path: fileToUse })
       });
-      const data = await resp.json();
       setOrchestrationResult(data);
       setStatusMessage("Autonomous Production Pipeline Executed Successfully!");
     } catch (e) {
@@ -74,9 +74,9 @@ export default function AIAgentsConsole({
     setLoading(true);
     setStatusMessage(`Executing ${agentId}...`);
     try {
-      let resp;
+      let data;
       if (endpoint === '/api/v1/audio/mix-proposal') {
-        resp = await fetch(endpoint, {
+        data = await safeFetchJson(apiUrl(endpoint), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(tracks)
@@ -84,9 +84,8 @@ export default function AIAgentsConsole({
       } else {
         const formData = new FormData();
         formData.append('file_path', fileToUse);
-        resp = await fetch(endpoint, { method: 'POST', body: formData });
+        data = await safeFetchJson(apiUrl(endpoint), { method: 'POST', body: formData });
       }
-      const data = await resp.json();
       setActiveAgentResult({ agentId, data });
       setStatusMessage(`${agentId} completed successfully!`);
     } catch (e) {
@@ -183,7 +182,7 @@ export default function AIAgentsConsole({
               <span>Production Plan Execution Complete</span>
             </span>
             <a
-              href={orchestrationResult.download_url}
+              href={resolveAudioUrl(orchestrationResult.download_url)}
               download
               className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-mono transition-colors"
             >

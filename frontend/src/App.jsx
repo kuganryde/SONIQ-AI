@@ -12,6 +12,7 @@ import AudioAnalyzer from './components/AudioAnalyzer';
 import RecordingStudio from './components/RecordingStudio';
 import ExportCenter from './components/ExportCenter';
 import { audioEngine } from './audio/WebAudioEngine';
+import { apiUrl, safeFetchJson, resolveAudioUrl, getApiBase, setApiBaseOverride } from './config/api';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('studio');
@@ -21,6 +22,7 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [bpm, setBpm] = useState(120);
   const [loadingDemo, setLoadingDemo] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Auto-load demo project on initial mount so user has immediate playable audio
   useEffect(() => {
@@ -29,9 +31,9 @@ export default function App() {
 
   const handleLoadDemo = async () => {
     setLoadingDemo(true);
+    setErrorMessage('');
     try {
-      const resp = await fetch('/api/v1/projects/demo');
-      const data = await resp.json();
+      const data = await safeFetchJson(apiUrl('/api/v1/projects/demo'));
       setTracks(data.tracks || []);
       setBpm(data.tempo_bpm || 120);
       if (data.tracks && data.tracks.length > 0) {
@@ -39,11 +41,13 @@ export default function App() {
         setActiveFile({ file_path: data.tracks[0].file_path });
         // Load into Web Audio Engine for low-latency browser playback
         for (const trk of data.tracks) {
-          await audioEngine.loadTrackAudio(trk.id, trk.download_url);
+          const streamUrl = resolveAudioUrl(trk.download_url);
+          await audioEngine.loadTrackAudio(trk.id, streamUrl);
         }
       }
     } catch (e) {
       console.error("Failed to load studio demo project:", e);
+      setErrorMessage(`Demo Load Notice: ${e.message}`);
     } finally {
       setLoadingDemo(false);
     }
@@ -90,8 +94,7 @@ export default function App() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const resp = await fetch('/api/v1/audio/upload', { method: 'POST', body: formData });
-      const data = await resp.json();
+      const data = await safeFetchJson(apiUrl('/api/v1/audio/upload'), { method: 'POST', body: formData });
       
       const newTrack = {
         id: data.file_id,
@@ -111,7 +114,7 @@ export default function App() {
       setTracks(prev => [...prev, newTrack]);
       setActiveTrackId(newTrack.id);
       setActiveFile({ file_path: data.file_path });
-      await audioEngine.loadTrackAudio(newTrack.id, data.download_url);
+      await audioEngine.loadTrackAudio(newTrack.id, resolveAudioUrl(data.download_url));
     } catch (e) {
       alert(`Upload error: ${e.message}`);
     }
@@ -136,7 +139,7 @@ export default function App() {
     setTracks(prev => [...prev, newTrack]);
     setActiveTrackId(newId);
     if (audioData.download_url) {
-      await audioEngine.loadTrackAudio(newId, audioData.download_url);
+      await audioEngine.loadTrackAudio(newId, resolveAudioUrl(audioData.download_url));
     }
   };
 

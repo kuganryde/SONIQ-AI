@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiUrl, safeFetchJson, resolveAudioUrl } from '../config/api';
 import { Disc, Volume2, Download, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export default function SurroundStudio({
@@ -52,7 +53,7 @@ export default function SurroundStudio({
 
     setProcessing(true);
     try {
-      const resp = await fetch('/api/v1/audio/surround', {
+      const data = await safeFetchJson(apiUrl('/api/v1/audio/surround'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -63,7 +64,6 @@ export default function SurroundStudio({
           crossover_hz: crossoverHz
         })
       });
-      const data = await resp.json();
       setSurroundResult(data);
     } catch (e) {
       alert(`Surround render error: ${e.message}`);
@@ -249,7 +249,7 @@ export default function SurroundStudio({
             </div>
           </div>
           <a
-            href={surroundResult.download_url}
+            href={resolveAudioUrl(surroundResult.download_url)}
             download
             className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-mono text-xs font-bold transition-colors"
           >

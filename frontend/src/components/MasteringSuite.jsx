@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiUrl, safeFetchJson, resolveAudioUrl } from '../config/api';
 import { Volume2, Sparkles, ShieldCheck, Download, CheckCircle2 } from 'lucide-react';
 
 export default function MasteringSuite({
@@ -28,7 +29,7 @@ export default function MasteringSuite({
 
     setMastering(true);
     try {
-      const resp = await fetch('/api/v1/audio/master', {
+      const data = await safeFetchJson(apiUrl('/api/v1/audio/master'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -38,7 +39,6 @@ export default function MasteringSuite({
           custom_ceiling_dbtp: customCeiling
         })
       });
-      const data = await resp.json();
       setMasterResult(data);
     } catch (e) {
       alert(`Mastering error: ${e.message}`);
@@ -148,7 +148,7 @@ export default function MasteringSuite({
               </span>
             </div>
             <a
-              href={masterResult.download_url}
+              href={resolveAudioUrl(masterResult.download_url)}
               download
               className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold transition-colors"
             >
