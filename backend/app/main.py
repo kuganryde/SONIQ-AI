@@ -32,6 +32,13 @@ from app.agents.vocal_engineer import VocalEngineerAgent
 from app.agents.mastering_engineer import MasteringEngineerAgent
 from app.agents.surround_engineer import SurroundEngineerAgent
 from app.agents.quality_control import QualityControlAgent
+from app.core.resource_guard import (
+    AudioCacheManager,
+    RateLimitMiddleware,
+    RateLimitTier,
+    ResourceGuard,
+    global_rate_limiter,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("soniq.main")
@@ -40,7 +47,9 @@ logger = logging.getLogger("soniq.main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing SONIQ AI Autonomous Professional Audio Platform...")
-    # Generate demo project if empty
+    # Prune stale temporary audio derivatives (preserves immutable uploads/)
+    pruned = AudioCacheManager.prune_temporary_storage(settings.STORAGE_DIR, max_age_hours=48)
+    logger.info(f"Storage resource check: pruned {pruned} temporary stale files.")
     yield
     logger.info("Shutting down SONIQ AI Platform.")
 
@@ -51,6 +60,9 @@ app = FastAPI(
     version=settings.APP_VERSION,
     lifespan=lifespan
 )
+
+# Enforce Abuse-Prevention Rate Limiting & Resource Protection
+app.add_middleware(RateLimitMiddleware, limiter=global_rate_limiter)
 
 app.add_middleware(
     CORSMiddleware,
@@ -198,10 +210,22 @@ async def download_audio(filename: str):
 
 @app.post("/api/v1/audio/analyze")
 async def analyze_audio(file_path: str = Form(...)):
-    """Agent 01: Deep Acoustic & Technical Inspection."""
+    """Agent 01: Deep Acoustic & Technical Inspection with Content-Hashed Caching."""
     if not Path(file_path).exists():
         raise HTTPException(status_code=404, detail="File not found")
-    return await analyst_agent.analyze_recording(file_path)
+
+    # Check Acoustic Analysis Cache
+    cached = AudioCacheManager.get_cached_analysis(file_path)
+    if cached:
+        return {**cached, "cached": True}
+
+    async with ResourceGuard.dsp_semaphore:
+        try:
+            result = await analyst_agent.analyze_recording(file_path)
+            AudioCacheManager.store_analysis(file_path, result)
+            return {**result, "cached": False}
+        finally:
+            ResourceGuard.clean_memory()
 
 
 @app.post("/api/v1/audio/separate-stems")
@@ -209,7 +233,11 @@ async def separate_stems(file_path: str = Form(...)):
     """Agent 02: Source Separation into Vocals, Drums, Bass, and Other."""
     if not Path(file_path).exists():
         raise HTTPException(status_code=404, detail="File not found")
-    return await stem_agent.separate_stems(file_path)
+    async with ResourceGuard.dsp_semaphore:
+        try:
+            return await stem_agent.separate_stems(file_path)
+        finally:
+            ResourceGuard.clean_memory()
 
 
 @app.post("/api/v1/audio/restore")
@@ -222,7 +250,11 @@ async def restore_audio(
     """Agent 03: Spectral De-noise, De-hum, and De-clip."""
     if not Path(file_path).exists():
         raise HTTPException(status_code=404, detail="File not found")
-    return await restoration_agent.restore_audio(file_path, denoise=denoise, dehum_freq=dehum_freq, declip=declip)
+    async with ResourceGuard.dsp_semaphore:
+        try:
+            return await restoration_agent.restore_audio(file_path, denoise=denoise, dehum_freq=dehum_freq, declip=declip)
+        finally:
+            ResourceGuard.clean_memory()
 
 
 @app.post("/api/v1/audio/mix-proposal")
@@ -248,7 +280,11 @@ async def vocal_process(
     """Agent 06: Vocal Tuning, De-essing, and Studio Air."""
     if not Path(file_path).exists():
         raise HTTPException(status_code=404, detail="File not found")
-    return await vocal_agent.process_vocal(file_path, target_scale=target_scale, de_ess_amount_db=de_ess_db)
+    async with ResourceGuard.dsp_semaphore:
+        try:
+            return await vocal_agent.process_vocal(file_path, target_scale=target_scale, de_ess_amount_db=de_ess_db)
+        finally:
+            ResourceGuard.clean_memory()
 
 
 @app.post("/api/v1/audio/master")
@@ -256,12 +292,16 @@ async def master_audio(req: MasteringProcessRequest):
     """Agent 07: EBU R128 / ITU-R BS.1770 Mastering."""
     if not Path(req.file_path).exists():
         raise HTTPException(status_code=404, detail="File not found")
-    return await mastering_agent.execute_mastering(
-        req.file_path,
-        profile_key=req.profile,
-        custom_target_lufs=req.custom_target_lufs,
-        custom_ceiling_dbtp=req.custom_ceiling_dbtp
-    )
+    async with ResourceGuard.dsp_semaphore:
+        try:
+            return await mastering_agent.execute_mastering(
+                req.file_path,
+                profile_key=req.profile,
+                custom_target_lufs=req.custom_target_lufs,
+                custom_ceiling_dbtp=req.custom_ceiling_dbtp
+            )
+        finally:
+            ResourceGuard.clean_memory()
 
 
 @app.post("/api/v1/audio/surround")
@@ -269,14 +309,18 @@ async def surround_process(req: SurroundProcessRequest):
     """Agent 08: 5.1 / 7.1 / 7.1.4 3D Spatial Panning, LFE Bass Management & Binaural HRTF."""
     if not Path(req.file_path).exists():
         raise HTTPException(status_code=404, detail="File not found")
-    return await surround_agent.create_surround_mix(
-        req.file_path,
-        target_layout=req.layout,
-        crossover_hz=req.crossover_hz,
-        x=req.x,
-        y=req.y,
-        z=req.z
-    )
+    async with ResourceGuard.dsp_semaphore:
+        try:
+            return await surround_agent.create_surround_mix(
+                req.file_path,
+                target_layout=req.layout,
+                crossover_hz=req.crossover_hz,
+                x=req.x,
+                y=req.y,
+                z=req.z
+            )
+        finally:
+            ResourceGuard.clean_memory()
 
 
 @app.post("/api/v1/audio/qc-audit")
@@ -292,69 +336,126 @@ async def orchestrate_production(req: OrchestrateRequest):
     """Agent 10: Multi-Agent Conversational Autonomous Production."""
     if not Path(req.file_path).exists():
         raise HTTPException(status_code=404, detail="File not found")
-    return await prod_manager.execute_autonomous_pipeline(req.prompt, req.file_path)
+    async with ResourceGuard.dsp_semaphore:
+        try:
+            return await prod_manager.execute_autonomous_pipeline(req.prompt, req.file_path)
+        finally:
+            ResourceGuard.clean_memory()
 
 
 @app.post("/api/v1/dsp/process")
 async def process_dsp_rack(req: DSPProcessRequest):
-    """Direct Studio DSP Rack Processor."""
+    """Direct Studio DSP Rack Processor with Concurrency Semaphore & Memory Guard."""
     if not Path(req.file_path).exists():
         raise HTTPException(status_code=404, detail="File not found")
 
-    audio, sr = AudioIO.load_audio(req.file_path)
-    processed = np.copy(audio)
+    async with ResourceGuard.dsp_semaphore:
+        try:
+            audio, sr = AudioIO.load_audio(req.file_path)
+            processed = np.copy(audio)
 
-    for op in req.operations:
-        kind = op.get("type", "").lower()
-        if kind == "eq":
-            processed = DSPOps.apply_parametric_eq(processed, sr, op.get("bands", []))
-        elif kind == "compressor":
-            processed = DSPOps.apply_compressor(
-                processed, sr,
-                threshold_db=op.get("threshold_db", -20.0),
-                ratio=op.get("ratio", 4.0),
-                attack_ms=op.get("attack_ms", 15.0),
-                release_ms=op.get("release_ms", 100.0),
-                makeup_gain_db=op.get("makeup_gain_db", 0.0)
-            )
-        elif kind == "limiter":
-            processed = DSPOps.apply_brickwall_limiter(
-                processed, sr,
-                ceiling_dbtp=op.get("ceiling_dbtp", -0.1),
-                lookahead_ms=op.get("lookahead_ms", 5.0)
-            )
-        elif kind == "reverb":
-            processed = DSPOps.apply_algorithmic_reverb(
-                processed, sr,
-                room_size=op.get("room_size", 0.7),
-                damping=op.get("damping", 0.3),
-                wet_level=op.get("wet_level", 0.25)
-            )
-        elif kind == "delay":
-            processed = DSPOps.apply_stereo_delay(
-                processed, sr,
-                time_left_ms=op.get("time_left_ms", 250.0),
-                time_right_ms=op.get("time_right_ms", 375.0),
-                feedback=op.get("feedback", 0.35),
-                wet_level=op.get("wet_level", 0.3)
-            )
-        elif kind == "saturation":
-            processed = DSPOps.apply_harmonic_saturation(
-                processed,
-                drive_db=op.get("drive_db", 6.0),
-                mode=op.get("mode", "tape")
-            )
-        elif kind == "widener":
-            processed = DSPOps.apply_stereo_widener(processed, width_pct=op.get("width_pct", 120.0))
+            for op in req.operations:
+                kind = op.get("type", "").lower()
+                if kind == "eq":
+                    processed = DSPOps.apply_parametric_eq(processed, sr, op.get("bands", []))
+                elif kind == "compressor":
+                    processed = DSPOps.apply_compressor(
+                        processed, sr,
+                        threshold_db=op.get("threshold_db", -20.0),
+                        ratio=op.get("ratio", 4.0),
+                        attack_ms=op.get("attack_ms", 15.0),
+                        release_ms=op.get("release_ms", 100.0),
+                        makeup_gain_db=op.get("makeup_gain_db", 0.0)
+                    )
+                elif kind == "limiter":
+                    processed = DSPOps.apply_brickwall_limiter(
+                        processed, sr,
+                        ceiling_dbtp=op.get("ceiling_dbtp", -0.1),
+                        lookahead_ms=op.get("lookahead_ms", 5.0)
+                    )
+                elif kind == "reverb":
+                    processed = DSPOps.apply_algorithmic_reverb(
+                        processed, sr,
+                        room_size=op.get("room_size", 0.7),
+                        damping=op.get("damping", 0.3),
+                        wet_level=op.get("wet_level", 0.25)
+                    )
+                elif kind == "delay":
+                    processed = DSPOps.apply_stereo_delay(
+                        processed, sr,
+                        time_left_ms=op.get("time_left_ms", 250.0),
+                        time_right_ms=op.get("time_right_ms", 375.0),
+                        feedback=op.get("feedback", 0.35),
+                        wet_level=op.get("wet_level", 0.3)
+                    )
+                elif kind == "saturation":
+                    processed = DSPOps.apply_harmonic_saturation(
+                        processed,
+                        drive_db=op.get("drive_db", 6.0),
+                        mode=op.get("mode", "tape")
+                    )
+                elif kind == "widener":
+                    processed = DSPOps.apply_stereo_widener(processed, width_pct=op.get("width_pct", 120.0))
 
-    out_file = settings.PROCESSED_DIR / f"{Path(req.file_path).stem}_dsp_rack.wav"
-    AudioIO.write_audio(processed, out_file, sample_rate=sr, bit_depth="24", format_type="WAV")
+            out_file = settings.PROCESSED_DIR / f"{Path(req.file_path).stem}_dsp_rack.wav"
+            AudioIO.write_audio(processed, out_file, sample_rate=sr, bit_depth="24", format_type="WAV")
+
+            return {
+                "status": "COMPLETED",
+                "processed_file": str(out_file),
+                "download_url": f"/api/v1/audio/download/{out_file.name}",
+                "metrics": AudioAnalyzer.full_audio_analysis(processed, sr)
+            }
+        finally:
+            ResourceGuard.clean_memory()
+
+
+@app.get("/api/v1/system/resources")
+async def get_system_resources():
+    """System Resource, Cache & Abuse Protection Status."""
+    mem_info = {}
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                parts = line.split(":")
+                if len(parts) == 2:
+                    mem_info[parts[0].strip()] = int(parts[1].split()[0])
+    except Exception:
+        pass
+
+    total_ram_gb = round(mem_info.get("MemTotal", 0) / (1024**2), 2)
+    avail_ram_gb = round(mem_info.get("MemAvailable", 0) / (1024**2), 2)
+    ram_pct = round(((total_ram_gb - avail_ram_gb) / max(total_ram_gb, 1)) * 100, 1)
+
+    stat = os.statvfs(str(settings.STORAGE_DIR))
+    free_disk_gb = round((stat.f_bavail * stat.f_frsize) / (1024**3), 2)
+    total_disk_gb = round((stat.f_blocks * stat.f_frsize) / (1024**3), 2)
+    disk_pct = round(((total_disk_gb - free_disk_gb) / max(total_disk_gb, 1)) * 100, 1)
 
     return {
-        "status": "COMPLETED",
-        "processed_file": str(out_file),
-        "download_url": f"/api/v1/audio/download/{out_file.name}",
-        "metrics": AudioAnalyzer.full_audio_analysis(processed, sr)
+        "status": "ACTIVE",
+        "concurrency_protection": {
+            "max_parallel_heavy_dsp_jobs": 3,
+            "semaphore_active": True
+        },
+        "rate_limiting_tiers": {
+            "default": f"{RateLimitTier.DEFAULT[0]} req / {RateLimitTier.DEFAULT[1]}s",
+            "heavy_dsp": f"{RateLimitTier.HEAVY_DSP[0]} req / {RateLimitTier.HEAVY_DSP[1]}s",
+            "upload": f"{RateLimitTier.UPLOAD[0]} req / {RateLimitTier.UPLOAD[1]}s",
+            "ai_orchestrate": f"{RateLimitTier.AI_ORCHESTRATE[0]} req / {RateLimitTier.AI_ORCHESTRATE[1]}s"
+        },
+        "cache_management": {
+            "cached_analysis_entries": len(AudioCacheManager._analysis_cache),
+            "max_cache_capacity": AudioCacheManager._cache_max_size,
+            "temp_file_retention_hours": 48
+        },
+        "system_telemetry": {
+            "ram_total_gb": total_ram_gb,
+            "ram_available_gb": avail_ram_gb,
+            "ram_percent_used": ram_pct,
+            "disk_free_gb": free_disk_gb,
+            "disk_percent_used": disk_pct
+        }
     }
 
 
