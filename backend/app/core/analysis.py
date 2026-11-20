@@ -147,16 +147,19 @@ class AudioAnalyzer:
         sample_peak = float(np.max(np.abs(audio)))
         sample_peak_db = 20 * math.log10(max(sample_peak, 1e-12))
         
-        # True Peak with 4x polyphase oversampling interpolation
+        # True Peak with 4x polyphase oversampling interpolation (conforming to ITU-R BS.1770)
         channels = audio.shape[0]
         true_peak_val = sample_peak
+        block_size = 262144
         
         for ch in range(channels):
-            # Resample 4x
-            oversampled = scipy.signal.resample(audio[ch], audio[ch].shape[0] * 4)
-            ch_true_peak = float(np.max(np.abs(oversampled)))
-            if ch_true_peak > true_peak_val:
-                true_peak_val = ch_true_peak
+            # Stream in blocks to maintain low memory profile and sub-second performance
+            for start in range(0, audio.shape[1], block_size):
+                chunk = audio[ch, start:start + block_size]
+                oversampled = scipy.signal.resample_poly(chunk, 4, 1)
+                ch_peak = float(np.max(np.abs(oversampled)))
+                if ch_peak > true_peak_val:
+                    true_peak_val = ch_peak
                 
         true_peak_db = 20 * math.log10(max(true_peak_val, 1e-12))
         return round(sample_peak_db, 2), round(true_peak_db, 2)
@@ -200,13 +203,12 @@ class AudioAnalyzer:
 
     @staticmethod
     def analyze_frequency_balance(audio: np.ndarray, sample_rate: int) -> Dict[str, float]:
-        """Calculates energy distribution across acoustic frequency octaves."""
-        # Mix down to mono for spectral distribution
+        """Calculates energy distribution across acoustic frequency octaves using Welch PSD."""
         mono = np.mean(audio, axis=0)
-        fft_vals = np.abs(np.fft.rfft(mono))
-        freqs = np.fft.rfftfreq(len(mono), 1.0 / sample_rate)
+        nperseg = min(16384, len(mono))
+        freqs, psd = scipy.signal.welch(mono, fs=sample_rate, nperseg=nperseg)
         
-        total_energy = np.sum(fft_vals ** 2) + 1e-12
+        total_energy = np.sum(psd) + 1e-12
         
         bands = {
             "sub_bass_20_60hz": (20, 60),
@@ -220,7 +222,7 @@ class AudioAnalyzer:
         distribution = {}
         for name, (low, high) in bands.items():
             mask = (freqs >= low) & (freqs < high)
-            band_energy = np.sum(fft_vals[mask] ** 2)
+            band_energy = np.sum(psd[mask])
             pct = (band_energy / total_energy) * 100.0
             distribution[name] = round(float(pct), 2)
             

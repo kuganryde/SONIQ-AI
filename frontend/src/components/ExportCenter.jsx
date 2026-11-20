@@ -12,8 +12,10 @@ export default function ExportCenter({
   const [channelLayout, setChannelLayout] = useState('stereo');
   const [exporting, setExporting] = useState(false);
   const [exportCertificate, setExportCertificate] = useState(null);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleExport = async () => {
+    setErrorMessage('');
     const fileToUse = activeFile?.file_path || (tracks[0] ? tracks[0].file_path : null);
     if (!fileToUse) {
       alert("Please import an audio file or record a track first.");
@@ -37,6 +39,7 @@ export default function ExportCenter({
       });
       setExportCertificate(data);
     } catch (e) {
+      setErrorMessage(e.message);
       alert(`Export error: ${e.message}`);
     } finally {
       setExporting(false);
@@ -59,11 +62,23 @@ export default function ExportCenter({
         <button
           onClick={handleExport}
           disabled={exporting}
-          className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 hover:from-cyan-400 hover:to-violet-500 text-black font-extrabold text-xs shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition-all font-mono"
+          className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 hover:from-cyan-400 hover:to-violet-500 text-black font-extrabold text-xs shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition-all font-mono cursor-pointer"
         >
-          {exporting ? 'Rendering Audio...' : `Export Master ${outputFormat} (${bitDepth}-bit / ${sampleRate / 1000}kHz)`}
+          {exporting ? 'Rendering & Analyzing Master QC...' : `Export Master ${outputFormat} (${bitDepth}-bit / ${sampleRate / 1000}kHz)`}
         </button>
       </div>
+
+      {errorMessage && (
+        <div className="bg-rose-950/40 p-4 rounded-xl border border-rose-800 text-rose-300 text-xs font-mono flex items-center justify-between shadow-lg">
+          <div className="flex items-center space-x-2">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>Export Error: {errorMessage}</span>
+          </div>
+          <button onClick={() => setErrorMessage('')} className="text-slate-400 hover:text-white text-xs underline cursor-pointer">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Export Specifications Configuration */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

@@ -496,10 +496,20 @@ async def generate_synth(req: SynthGenerateRequest):
 @app.post("/api/v1/export/render")
 async def render_export(req: ExportRenderRequest):
     """Full Mix & Stem Lossless Rendering with QC Certificate."""
-    if not Path(req.file_path).exists():
-        raise HTTPException(status_code=404, detail="File not found")
+    p = Path(req.file_path)
+    if not p.is_absolute():
+        p = settings.STORAGE_DIR / p
+    if not p.exists():
+        # Search storage subdirectories
+        for sub in [settings.UPLOADS_DIR, settings.PROCESSED_DIR, settings.EXPORTS_DIR, settings.STEMS_DIR]:
+            candidate = sub / Path(req.file_path).name
+            if candidate.exists():
+                p = candidate
+                break
+    if not p.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {req.file_path}")
 
-    audio, sr = AudioIO.load_audio(req.file_path)
+    audio, sr = AudioIO.load_audio(p)
     cert = ExportEngine.render_and_export(
         audio=audio,
         sample_rate=sr,

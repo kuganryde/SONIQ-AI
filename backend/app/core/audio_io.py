@@ -169,14 +169,14 @@ class AudioIO:
         if mono and data.shape[0] > 1:
             data = np.mean(data, axis=0, keepdims=True)
 
-        # Resampling if requested
+        # Resampling if requested using streaming polyphase filter
         if target_sr and target_sr != sr:
             import scipy.signal
-            num_samples = int(round(data.shape[1] * target_sr / sr))
-            resampled = []
-            for ch in range(data.shape[0]):
-                resampled.append(scipy.signal.resample(data[ch], num_samples))
-            data = np.array(resampled, dtype=np.float64)
+            import math
+            gcd = math.gcd(int(target_sr), int(sr))
+            up = int(target_sr) // gcd
+            down = int(sr) // gcd
+            data = scipy.signal.resample_poly(data, up, down, axis=1)
             sr = target_sr
 
         return data, sr
@@ -233,7 +233,7 @@ class AudioIO:
             try:
                 cmd = ["ffmpeg", "-y", "-i", str(temp_wav)]
                 if fmt == "MP3":
-                    cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k"])
+                    cmd.extend(["-ac", "2", "-c:a", "libmp3lame", "-b:a", "320k"])
                 elif fmt == "AAC":
                     cmd.extend(["-c:a", "aac", "-b:a", "320k"])
                 elif fmt == "OGG":

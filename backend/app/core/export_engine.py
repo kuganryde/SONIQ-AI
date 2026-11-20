@@ -35,14 +35,47 @@ class ExportEngine:
         sr = target_sample_rate or sample_rate
         proc_audio = np.copy(audio)
 
-        # Resample if target sample rate differs
+        # Resample if target sample rate differs using memory-efficient polyphase filtering
         if sr != sample_rate:
             import scipy.signal
-            num_samples = int(round(proc_audio.shape[1] * sr / sample_rate))
-            resampled = []
-            for ch in range(proc_audio.shape[0]):
-                resampled.append(scipy.signal.resample(proc_audio[ch], num_samples))
-            proc_audio = np.array(resampled, dtype=np.float64)
+            import math
+            gcd = math.gcd(int(sr), int(sample_rate))
+            up = int(sr) // gcd
+            down = int(sample_rate) // gcd
+            proc_audio = scipy.signal.resample_poly(proc_audio, up, down, axis=1)
+
+        # Channel layout adaptation (5.1 surround, 7.1 surround, or stereo downmix)
+        ch_in = proc_audio.shape[0]
+        if channels_layout == "5.1" and ch_in != 6:
+            if ch_in == 1:
+                L = R = proc_audio[0]
+            else:
+                L, R = proc_audio[0], proc_audio[1]
+            C = 0.5 * (L + R)
+            LFE = 0.3 * (L + R)
+            Ls = 0.6 * L
+            Rs = 0.6 * R
+            proc_audio = np.array([L, R, C, LFE, Ls, Rs], dtype=np.float64)
+        elif channels_layout == "7.1" and ch_in != 8:
+            if ch_in == 1:
+                L = R = proc_audio[0]
+            else:
+                L, R = proc_audio[0], proc_audio[1]
+            C = 0.5 * (L + R)
+            LFE = 0.3 * (L + R)
+            Ls = 0.6 * L
+            Rs = 0.6 * R
+            Rls = 0.4 * L
+            Rrs = 0.4 * R
+            proc_audio = np.array([L, R, C, LFE, Ls, Rs, Rls, Rrs], dtype=np.float64)
+        elif channels_layout == "stereo" and ch_in > 2:
+            L = proc_audio[0] + 0.707 * proc_audio[2]
+            R = proc_audio[1] + 0.707 * proc_audio[2]
+            if ch_in >= 6:
+                L += 0.707 * proc_audio[4]
+                R += 0.707 * proc_audio[5]
+            max_val = max(float(np.max(np.abs(L))), float(np.max(np.abs(R))), 1.0)
+            proc_audio = np.array([L / max_val, R / max_val], dtype=np.float64)
 
         # Output filename
         safe_proj = "".join(c for c in project_name if c.isalnum() or c in ("-", "_")).rstrip()
