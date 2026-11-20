@@ -185,6 +185,13 @@ class WebAudioEngine {
     this.isPlaying = false;
   }
 
+  clearAllTracks() {
+    this.stopAll();
+    this.tracks.clear();
+    this.pauseOffset = 0;
+    this.startTime = 0;
+  }
+
   setTrackVolume(trackId, vol) {
     const track = this.tracks.get(trackId);
     if (track) {

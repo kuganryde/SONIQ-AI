@@ -23,7 +23,7 @@ export default function MasteringSuite({
   const handleExecuteMaster = async () => {
     const fileToUse = activeFile?.file_path || (tracks[0] ? tracks[0].file_path : null);
     if (!fileToUse) {
-      alert("Please load a demo project or upload an audio file first.");
+      alert("Please import an audio file or record a track first.");
       return;
     }
 

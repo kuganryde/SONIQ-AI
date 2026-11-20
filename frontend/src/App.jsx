@@ -29,10 +29,13 @@ export default function App() {
   const [isQuickFXOpen, setIsQuickFXOpen] = useState(false);
   const [showQuickBanner, setShowQuickBanner] = useState(true);
 
-  // Auto-load demo project on initial mount so user has immediate playable audio
-  useEffect(() => {
-    handleLoadDemo();
-  }, []);
+  const handleClearSession = () => {
+    audioEngine.clearAllTracks();
+    setTracks([]);
+    setActiveTrackId(null);
+    setActiveFile(null);
+    setIsPlaying(false);
+  };
 
   const handleLoadDemo = async () => {
     setLoadingDemo(true);
@@ -258,6 +261,10 @@ export default function App() {
               onUpdateTrack={handleUpdateTrack}
               onAddTrack={handleAddTrack}
               onUploadFile={handleUploadFile}
+              onClearSession={handleClearSession}
+              onLoadDemo={handleLoadDemo}
+              loadingDemo={loadingDemo}
+              onNavigateTab={(tab) => setActiveTab(tab)}
               activeTrackId={activeTrackId}
               setActiveTrackId={(id) => {
                 setActiveTrackId(id);
