@@ -68,6 +68,22 @@ class ExportEngine:
             Rls = 0.4 * L
             Rrs = 0.4 * R
             proc_audio = np.array([L, R, C, LFE, Ls, Rs, Rls, Rrs], dtype=np.float64)
+        elif channels_layout == "7.1.4" and ch_in != 12:
+            if ch_in == 1:
+                L = R = proc_audio[0]
+            else:
+                L, R = proc_audio[0], proc_audio[1]
+            C = 0.5 * (L + R)
+            LFE = 0.3 * (L + R)
+            Ls = 0.6 * L
+            Rs = 0.6 * R
+            Rls = 0.4 * L
+            Rrs = 0.4 * R
+            Tfl = 0.35 * L
+            Tfr = 0.35 * R
+            Trl = 0.35 * Ls
+            Trr = 0.35 * Rs
+            proc_audio = np.array([L, R, C, LFE, Ls, Rs, Rls, Rrs, Tfl, Tfr, Trl, Trr], dtype=np.float64)
         elif channels_layout == "stereo" and ch_in > 2:
             L = proc_audio[0] + 0.707 * proc_audio[2]
             R = proc_audio[1] + 0.707 * proc_audio[2]
@@ -104,8 +120,8 @@ class ExportEngine:
 
         # Format warnings
         warnings = []
-        if output_format.upper() in ["MP3", "AAC", "OGG", "OPUS"]:
-            warnings.append(f"Format {output_format} involves lossy perceptual compression. Not bit-transparent.")
+        if output_format.upper() in ["MP3", "AAC", "OGG", "OPUS", "AC3", "EAC3"]:
+            warnings.append(f"Format {output_format} involves broadcast lossy compression (Dolby / DTS perceptual encoding).")
         if qc_metrics["clipping"]["has_clipping"]:
             warnings.append(f"Clipping detected: {qc_metrics['clipping']['clipped_samples_count']} samples saturated.")
         if qc_metrics["phase_correlation"] < 0.2:

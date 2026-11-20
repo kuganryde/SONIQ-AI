@@ -9,6 +9,7 @@ from app.core.surround_engine import SurroundLayout, SurroundPannerEngine
 from app.core.synth_engine import SynthEngine
 from app.core.mastering_engine import MasteringEngine
 from app.core.export_engine import ExportEngine
+from app.core.cinema_processor import DolbyProcessor, DTSProcessor
 from app.config import settings
 
 
@@ -152,3 +153,34 @@ def test_export_engine_flac_and_wav(synthetic_stereo_audio, tmp_path):
     assert cert["technical_specifications"]["format"] == "FLAC"
     assert cert["technical_specifications"]["bit_depth"] == "24"
     assert cert["quality_audit"]["passed_clipping_test"] is True
+
+
+def test_dolby_processing_suite(synthetic_stereo_audio):
+    audio, sr = synthetic_stereo_audio
+    # Dolby Pro Logic II 5.1
+    d51 = DolbyProcessor.apply_pro_logic_ii_matrix(audio, sr, layout=SurroundLayout.FIVE_POINT_ONE)
+    assert d51.shape[0] == 6
+    assert d51.shape[1] == audio.shape[1]
+
+    # Dolby Atmos 7.1.4
+    d714 = DolbyProcessor.apply_pro_logic_ii_matrix(audio, sr, layout=SurroundLayout.SEVEN_POINT_ONE_FOUR)
+    assert d714.shape[0] == 12
+
+    # Dialnorm & DRC
+    norm, stats = DolbyProcessor.apply_dialnorm_and_drc(d51, sr, target_dialnorm=-27.0, drc_profile="film_standard")
+    assert norm.shape == d51.shape
+    assert stats["target_dialnorm_db"] == -27.0
+    assert "drc_profile" in stats
+
+
+def test_dts_processing_suite(synthetic_stereo_audio):
+    audio, sr = synthetic_stereo_audio
+    # DTS Neural:X 7.1.4
+    dts714 = DTSProcessor.apply_neural_x_upmix(audio, sr, layout=SurroundLayout.SEVEN_POINT_ONE_FOUR)
+    assert dts714.shape[0] == 12
+
+    # DTS Dialogue Clarity
+    clear, stats = DTSProcessor.apply_dialogue_clarity(dts714, sr, boost_db=4.0)
+    assert clear.shape == dts714.shape
+    assert stats["dialogue_boost_db"] == 4.0
+    assert stats["center_channel_idx"] == 2

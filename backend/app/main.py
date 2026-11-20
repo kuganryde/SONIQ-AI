@@ -21,6 +21,7 @@ from app.core.dsp_engine import DSPOps
 from app.core.export_engine import ExportEngine
 from app.core.mastering_engine import MASTERING_PROFILES, MasteringEngine
 from app.core.surround_engine import SurroundLayout, SurroundPannerEngine
+from app.core.cinema_processor import DolbyProcessor, DTSProcessor
 from app.core.synth_engine import SynthEngine
 from app.agents.production_manager import ProductionManagerAgent
 from app.agents.audio_analyst import AudioAnalystAgent
@@ -126,6 +127,17 @@ class ExportRenderRequest(BaseModel):
     bit_depth: str = "24"
     sample_rate: int = 96000
     channels_layout: str = "stereo"
+
+
+class CinemaProcessRequest(BaseModel):
+    file_path: str
+    processor_type: str = "dolby" # "dolby" or "dts"
+    profile: str = "dolby_atmos_7_1_4"
+    dialnorm_db: float = -27.0
+    drc_profile: str = "film_standard"
+    dialogue_boost_db: float = 3.0
+    crossover_hz: float = 80.0
+    generate_binaural: bool = True
 
 
 class OrchestrateRequest(BaseModel):
@@ -319,6 +331,123 @@ async def surround_process(req: SurroundProcessRequest):
                 y=req.y,
                 z=req.z
             )
+        finally:
+            ResourceGuard.clean_memory()
+
+
+@app.post("/api/v1/audio/cinema-process")
+async def cinema_process(req: CinemaProcessRequest):
+    """
+    Dolby & DTS Cinema and Spatial Audio Processor.
+    Supports Dolby Pro Logic II Matrix, Dialnorm (-31 to -20 dBFS), Dolby DRC,
+    Dolby Atmos 7.1.4 Height Bed, DTS Neural:X Upmixing, DTS Dialogue Clarity,
+    and 3D Binaural Headphone Virtualization.
+    """
+    p = Path(req.file_path)
+    if not p.is_absolute():
+        p = settings.STORAGE_DIR / p
+    if not p.exists():
+        for sub in [settings.UPLOADS_DIR, settings.PROCESSED_DIR, settings.EXPORTS_DIR, settings.STEMS_DIR]:
+            candidate = sub / Path(req.file_path).name
+            if candidate.exists():
+                p = candidate
+                break
+    if not p.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {req.file_path}")
+
+    async with ResourceGuard.dsp_semaphore:
+        try:
+            audio, sr = AudioIO.load_audio(p)
+            proc_type = req.processor_type.lower()
+            stats = {}
+
+            if proc_type == "dolby":
+                if req.profile == "dolby_pro_logic_ii":
+                    multichannel = DolbyProcessor.apply_pro_logic_ii_matrix(
+                        audio, sr, crossover_hz=req.crossover_hz, layout=SurroundLayout.FIVE_POINT_ONE
+                    )
+                    layout_str = SurroundLayout.FIVE_POINT_ONE
+                elif req.profile == "dolby_digital_5_1":
+                    matrixed = DolbyProcessor.apply_pro_logic_ii_matrix(
+                        audio, sr, crossover_hz=req.crossover_hz, layout=SurroundLayout.FIVE_POINT_ONE
+                    )
+                    multichannel, stats = DolbyProcessor.apply_dialnorm_and_drc(
+                        matrixed, sr, target_dialnorm=req.dialnorm_db, drc_profile=req.drc_profile
+                    )
+                    layout_str = SurroundLayout.FIVE_POINT_ONE
+                else: # "dolby_atmos_7_1_4" default
+                    matrixed = DolbyProcessor.apply_pro_logic_ii_matrix(
+                        audio, sr, crossover_hz=req.crossover_hz, layout=SurroundLayout.SEVEN_POINT_ONE_FOUR
+                    )
+                    multichannel, stats = DolbyProcessor.apply_dialnorm_and_drc(
+                        matrixed, sr, target_dialnorm=req.dialnorm_db, drc_profile=req.drc_profile
+                    )
+                    layout_str = SurroundLayout.SEVEN_POINT_ONE_FOUR
+            else: # "dts"
+                if req.profile == "dts_dialogue_clarity":
+                    upmixed = DTSProcessor.apply_neural_x_upmix(
+                        audio, sr, crossover_hz=req.crossover_hz, layout=SurroundLayout.FIVE_POINT_ONE, mode="cinema"
+                    )
+                    multichannel, stats = DTSProcessor.apply_dialogue_clarity(
+                        upmixed, sr, boost_db=req.dialogue_boost_db
+                    )
+                    layout_str = SurroundLayout.FIVE_POINT_ONE
+                elif req.profile == "dts_neo_6_cinema":
+                    multichannel = DTSProcessor.apply_neural_x_upmix(
+                        audio, sr, crossover_hz=req.crossover_hz, layout=SurroundLayout.SEVEN_POINT_ONE, mode="cinema"
+                    )
+                    layout_str = SurroundLayout.SEVEN_POINT_ONE
+                else: # "dts_x_7_1_4" default
+                    upmixed = DTSProcessor.apply_neural_x_upmix(
+                        audio, sr, crossover_hz=req.crossover_hz, layout=SurroundLayout.SEVEN_POINT_ONE_FOUR, mode="cinema"
+                    )
+                    multichannel, stats = DTSProcessor.apply_dialogue_clarity(
+                        upmixed, sr, boost_db=req.dialogue_boost_db
+                    )
+                    layout_str = SurroundLayout.SEVEN_POINT_ONE_FOUR
+
+            # Write multichannel WAV master
+            safe_name = f"{p.stem}_{proc_type.upper()}_{req.profile}.wav"
+            out_p = settings.EXPORTS_DIR / safe_name
+            actual_out = AudioIO.write_audio(multichannel, out_p, sample_rate=sr, bit_depth="24", format_type="WAV")
+
+            # Generate Binaural HRTF Headphone Virtualization
+            bin_p = None
+            bin_url = None
+            if req.generate_binaural:
+                binaural_audio = SurroundPannerEngine.render_binaural_hrtf(
+                    multichannel, layout=layout_str, sample_rate=sr
+                )
+                bin_name = f"{p.stem}_{proc_type.upper()}_{req.profile}_binaural_hrtf.wav"
+                bin_out = settings.EXPORTS_DIR / bin_name
+                bin_actual = AudioIO.write_audio(binaural_audio, bin_out, sample_rate=sr, bit_depth="24", format_type="WAV")
+                bin_p = str(bin_actual)
+                bin_url = f"/api/v1/audio/download/{bin_actual.name}"
+
+            # Quick Acoustic QC Analysis
+            qc = AudioAnalyzer.full_audio_analysis(multichannel, sr)
+
+            return {
+                "status": "COMPLETED",
+                "processor_type": proc_type.upper(),
+                "profile": req.profile,
+                "file_path": str(actual_out),
+                "download_url": f"/api/v1/audio/download/{actual_out.name}",
+                "binaural_file": bin_p,
+                "binaural_download_url": bin_url,
+                "channels_count": multichannel.shape[0],
+                "channels_layout": layout_str,
+                "sample_rate_hz": sr,
+                "bit_depth": "24-bit",
+                "cinema_stats": stats,
+                "acoustic_qc": {
+                    "integrated_lufs": qc["integrated_lufs"],
+                    "true_peak_dbtp": qc["true_peak_dbtp"],
+                    "phase_correlation": qc["phase_correlation"],
+                    "loudness_range_lra": qc["loudness_range_lra"]
+                },
+                "disclaimer": f"Processed via Sovereign {proc_type.upper()} Studio Engine simulation conforming to SMPTE / ITU-R BS.775 multichannel standards."
+            }
         finally:
             ResourceGuard.clean_memory()
 

@@ -226,7 +226,7 @@ class AudioIO:
         elif fmt == "AIFF":
             subtype = "PCM_16" if bit_depth == "16" else ("FLOAT" if "32" in bit_depth else "PCM_24")
             sf.write(str(out_p), data_to_write, sample_rate, subtype=subtype, format="AIFF")
-        elif fmt in ["MP3", "AAC", "OGG", "OPUS"]:
+        elif fmt in ["MP3", "AAC", "OGG", "OPUS", "AC3", "EAC3", "DTS", "DCA"]:
             # Write temp WAV and convert via ffmpeg with strict quality parameters
             temp_wav = out_p.with_suffix(".tmp.wav")
             sf.write(str(temp_wav), data_to_write, sample_rate, subtype="PCM_24", format="WAV")
@@ -240,6 +240,12 @@ class AudioIO:
                     cmd.extend(["-c:a", "libvorbis", "-q:a", "8"])
                 elif fmt == "OPUS":
                     cmd.extend(["-c:a", "libopus", "-b:a", "256k"])
+                elif fmt == "AC3":
+                    cmd.extend(["-c:a", "ac3", "-b:a", "640k"])
+                elif fmt == "EAC3":
+                    cmd.extend(["-c:a", "eac3", "-b:a", "768k"])
+                elif fmt in ["DTS", "DCA"]:
+                    cmd.extend(["-c:a", "dca", "-b:a", "1536k", "-strict", "-2"])
                 cmd.append(str(out_p))
                 subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
             finally:

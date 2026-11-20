@@ -94,6 +94,9 @@ export default function ExportCenter({
             <option value="FLAC">Lossless FLAC</option>
             <option value="WAV">Broadcast WAV PCM</option>
             <option value="AIFF">AIFF</option>
+            <option value="AC3">Dolby Digital 5.1 (.ac3 640k)</option>
+            <option value="EAC3">Dolby Digital Plus (.eac3 768k)</option>
+            <option value="DTS">DTS Coherent Acoustics (.dts 1536k)</option>
             <option value="MP3">MP3 (320 kbps Perceptual)</option>
             <option value="OGG">OGG Vorbis</option>
           </select>
@@ -139,6 +142,7 @@ export default function ExportCenter({
             <option value="stereo">Stereo 2.0</option>
             <option value="5.1">5.1 Multichannel Surround</option>
             <option value="7.1">7.1 Multichannel Surround</option>
+            <option value="7.1.4">7.1.4 Dolby Atmos / DTS:X Height Bed</option>
           </select>
         </div>
 
