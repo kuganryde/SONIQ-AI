@@ -1,0 +1,54 @@
+{
+  "certificate_id": "CERT-1C9FF6D8378B",
+  "timestamp": "2026-11-20T08:09:04.366898+00:00",
+  "project_name": "Autonomous_Production",
+  "export_name": "Master_Delivery",
+  "file_name": "Autonomous_Production_Master_Delivery_48000Hz_24bit_d7539de4.flac",
+  "file_size_bytes": 2034974,
+  "download_path": "/api/v1/audio/download/Autonomous_Production_Master_Delivery_48000Hz_24bit_d7539de4.flac",
+  "technical_specifications": {
+    "format": "FLAC",
+    "codec": "flac",
+    "sample_rate_hz": 48000,
+    "bit_depth": "24",
+    "channel_count": 6,
+    "channel_layout": "5.1",
+    "duration_seconds": 4.5,
+    "is_lossless": true
+  },
+  "acoustic_measurements": {
+    "integrated_lufs": -17.76,
+    "short_term_max_lufs": -16.4,
+    "loudness_range_lra": 0.79,
+    "sample_peak_dbfs": -3.51,
+    "true_peak_dbtp": -3.4,
+    "rms_dbfs": -24.84,
+    "crest_factor_db": 21.33,
+    "dynamic_range_dr": 18,
+    "phase_correlation": 1.0,
+    "mono_compatible": true,
+    "clipping": {
+      "has_clipping": false,
+      "clipped_samples_count": 0,
+      "clipped_samples_percentage": 0.0,
+      "severity": "NONE"
+    },
+    "dc_offset": 3.6e-05,
+    "frequency_balance_pct": {
+      "sub_bass_20_60hz": 2.98,
+      "bass_60_250hz": 35.29,
+      "low_mids_250_500hz": 21.12,
+      "mids_500_2000hz": 36.46,
+      "high_mids_2k_6khz": 2.09,
+      "presence_brilliance_6k_20khz": 1.6
+    }
+  },
+  "quality_audit": {
+    "passed_clipping_test": true,
+    "passed_true_peak_test": true,
+    "passed_phase_test": true,
+    "overall_status": "APPROVED"
+  },
+  "warnings": [],
+  "metadata_tags": {}
+}

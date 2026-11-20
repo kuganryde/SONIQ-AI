@@ -1,0 +1,54 @@
+{
+  "certificate_id": "CERT-747C392E4F2A",
+  "timestamp": "2026-11-20T08:08:46.860503+00:00",
+  "project_name": "Acceptance",
+  "export_name": "TestA_Lossless",
+  "file_name": "Acceptance_TestA_Lossless_96000Hz_24bit_cb5ea563.flac",
+  "file_size_bytes": 562868,
+  "download_path": "/api/v1/audio/download/Acceptance_TestA_Lossless_96000Hz_24bit_cb5ea563.flac",
+  "technical_specifications": {
+    "format": "FLAC",
+    "codec": "flac",
+    "sample_rate_hz": 96000,
+    "bit_depth": "24",
+    "channel_count": 2,
+    "channel_layout": "stereo",
+    "duration_seconds": 4.5,
+    "is_lossless": true
+  },
+  "acoustic_measurements": {
+    "integrated_lufs": -14.46,
+    "short_term_max_lufs": -13.27,
+    "loudness_range_lra": 0.75,
+    "sample_peak_dbfs": -2.21,
+    "true_peak_dbtp": -2.21,
+    "rms_dbfs": -16.92,
+    "crest_factor_db": 14.71,
+    "dynamic_range_dr": 13,
+    "phase_correlation": 1.0,
+    "mono_compatible": true,
+    "clipping": {
+      "has_clipping": false,
+      "clipped_samples_count": 0,
+      "clipped_samples_percentage": 0.0,
+      "severity": "NONE"
+    },
+    "dc_offset": 0.000182,
+    "frequency_balance_pct": {
+      "sub_bass_20_60hz": 8.39,
+      "bass_60_250hz": 38.92,
+      "low_mids_250_500hz": 18.32,
+      "mids_500_2000hz": 30.87,
+      "high_mids_2k_6khz": 1.75,
+      "presence_brilliance_6k_20khz": 1.34
+    }
+  },
+  "quality_audit": {
+    "passed_clipping_test": true,
+    "passed_true_peak_test": true,
+    "passed_phase_test": true,
+    "overall_status": "APPROVED"
+  },
+  "warnings": [],
+  "metadata_tags": {}
+}
