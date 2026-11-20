@@ -26,7 +26,7 @@ class Settings(BaseModel):
     
     # AI Ollama Local Service
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.2:1b")
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
     
     # Audio Engineering Limits & Standards
     MAX_UPLOAD_SIZE_BYTES: int = 500 * 1024 * 1024  # 500 MB
