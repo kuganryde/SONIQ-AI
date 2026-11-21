@@ -65,7 +65,7 @@ def check_and_sync():
             else:
                 files_summary = f"{files_list[0]}, {files_list[1]} and {num_files - 2} other file(s)"
             
-            now_str = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+            now_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             commit_msg = f"auto(sync): update {files_summary} [{now_str}]"
             
             commit_code, commit_out, commit_err = run_git(["commit", "-m", commit_msg])
