@@ -55,6 +55,9 @@ export default function SurroundStudio({
   const [decodeLoading, setDecodeLoading] = useState(false);
   const [decodeResult, setDecodeResult] = useState(null);
 
+  // Audition Uplift & Live Meter Animation State
+  const [isAuditioning, setIsAuditioning] = useState(false);
+
   // Speaker coordinates in 2D fallback view
   const speakerLayouts2D = {
     '2.0': [
@@ -323,96 +326,211 @@ export default function SurroundStudio({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Left 2 Columns: 3D or 2D Room Visualizer */}
-        <div className="lg:col-span-2 space-y-3">
+        <div className="lg:col-span-2 space-y-4">
           {viewMode === '3d' ? (
             <ThreeSpatialRoom
               layout={layout}
               pos={puckPos}
               onChangePos={setPuckPos}
+              speakerGains={cinemaResult?.channel_levels || surroundResult?.channel_levels || {}}
               isBinaural={binauralActive}
+              upliftActive={Boolean(surroundResult || cinemaResult)}
+              upliftType={cinemaResult ? `${cinemaResult.processor_type} ${cinemaResult.profile}` : (surroundResult ? `${layout} Spatial Panner` : 'Cinema Uplift')}
+              isAuditioning={isAuditioning}
+              onToggleAudition={() => setIsAuditioning(!isAuditioning)}
             />
           ) : (
             <div className="bg-[#0a0d15] p-6 rounded-2xl border border-slate-800 shadow-2xl relative flex flex-col items-center justify-center min-h-[500px]">
-              <div className="absolute top-4 left-4 text-xs font-mono text-slate-400">
-                Acoustic Listening Arena (2D Polar Coordinates)
+              <div className="absolute top-4 left-4 text-xs font-mono text-slate-400 flex items-center space-x-2">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                <span className="font-bold text-white uppercase">{layout} Acoustic Polar Arena</span>
+                {Boolean(surroundResult || cinemaResult) && (
+                  <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-600 text-[10px] font-bold">
+                    POST-UPLIFT PANNING
+                  </span>
+                )}
               </div>
 
-              <div className="w-[380px] h-[380px] rounded-full border border-dashed border-slate-700 relative flex items-center justify-center bg-black/40">
+              <div className="w-[390px] h-[390px] rounded-full border border-dashed border-slate-700 relative flex items-center justify-center bg-black/40 shadow-inner">
                 {/* Center Listener Head */}
-                <div className="w-12 h-12 rounded-full bg-slate-800 border-2 border-cyan-400 flex items-center justify-center z-10 shadow-lg shadow-cyan-500/30">
-                  <span className="text-[10px] font-mono font-bold text-cyan-300">ENG</span>
+                <div className="w-14 h-14 rounded-full bg-slate-900 border-2 border-cyan-400 flex flex-col items-center justify-center z-10 shadow-lg shadow-cyan-500/30">
+                  <span className="text-[10px] font-mono font-bold text-cyan-300">SWEET</span>
+                  <span className="text-[8px] font-mono text-slate-400">SPOT</span>
                 </div>
 
-                {/* Draggable Audio Puck */}
+                {/* Post-Uplift Spatial Center Dialogue Anchor */}
+                {(cinemaResult || surroundResult) && (
+                  <div className="absolute top-8 w-7 h-7 rounded-full bg-cyan-400/90 border border-white shadow-lg shadow-cyan-400 flex items-center justify-center animate-pulse z-10" title="Center Dialogue Anchor">
+                    <span className="text-[8px] font-bold text-black font-mono">VOC</span>
+                  </div>
+                )}
+
+                {/* Draggable Audio Source Puck */}
                 <div
-                  className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-400 to-violet-500 border-2 border-white absolute shadow-lg shadow-violet-500/50 flex items-center justify-center cursor-move"
+                  className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-400 to-violet-500 border-2 border-white absolute shadow-lg shadow-violet-500/50 flex items-center justify-center cursor-move z-20"
                   style={{
                     left: `${((puckPos.x + 1) / 2) * 85 + 7.5}%`,
                     top: `${((1 - puckPos.y) / 2) * 85 + 7.5}%`
                   }}
-                  title="Audio Source"
+                  title="Source Coordinate (Pan Center)"
                 >
                   <div className="w-2 h-2 rounded-full bg-black animate-ping" />
                 </div>
 
-                {/* Speakers on Perimeter */}
-                {speakers2D.map(spk => (
-                  <div
-                    key={spk.id}
-                    className={`absolute px-2 py-0.5 rounded-lg border text-xs font-mono font-bold shadow-lg flex flex-col items-center ${
-                      spk.isLfe
-                        ? 'bg-amber-950 text-amber-300 border-amber-600'
-                        : spk.isHeight
-                        ? 'bg-purple-950 text-purple-300 border-purple-500'
-                        : 'bg-slate-900 text-cyan-300 border-slate-700'
-                    }`}
-                    style={{
-                      left: `${spk.x}%`,
-                      top: `${spk.y}%`,
-                      transform: 'translate(-50%, -50%)'
-                    }}
-                  >
-                    <span>{spk.id}</span>
-                    <span className="text-[8px] text-slate-400 font-normal">{spk.name}</span>
-                  </div>
-                ))}
+                {/* Speakers on Perimeter with Wavefront Indicators */}
+                {speakers2D.map(spk => {
+                  const gain = calculateGain(spk);
+                  const isHot = gain > 0.65;
+                  return (
+                    <div
+                      key={spk.id}
+                      className={`absolute px-2.5 py-1 rounded-xl border text-xs font-mono font-bold shadow-xl flex flex-col items-center transition-all ${
+                        spk.isLfe
+                          ? 'bg-amber-950 text-amber-300 border-amber-500 ring-2 ring-amber-500/30'
+                          : spk.isHeight
+                          ? 'bg-purple-950 text-purple-300 border-purple-500'
+                          : isHot
+                          ? 'bg-cyan-950 text-cyan-200 border-cyan-400 ring-2 ring-cyan-500/40'
+                          : 'bg-slate-900 text-slate-300 border-slate-700'
+                      }`}
+                      style={{
+                        left: `${spk.x}%`,
+                        top: `${spk.y}%`,
+                        transform: 'translate(-50%, -50%)'
+                      }}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span className={`w-1.5 h-1.5 rounded-full ${isHot ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`} />
+                        <span>{spk.id}</span>
+                      </div>
+                      <span className="text-[8px] text-slate-400 font-normal">{spk.name}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* Real-time Speaker Radiation VU Meters */}
-          <div className="bg-[#0b0e17] p-4 rounded-xl border border-slate-800/80 shadow-lg">
-            <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2.5">
-              <span className="font-bold text-cyan-300 uppercase">VBAP Real-Time Speaker Energy Radiation:</span>
-              <span className="text-[10px] text-slate-500">Sum of Squares Normalised</span>
+          {/* Broadcast Multi-Channel VU Meter Bridge & Sound Indicators Showcase */}
+          <div className="bg-[#0b0e17] p-5 rounded-2xl border border-slate-800 shadow-xl font-mono text-xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center">
+                  <Activity className="w-4 h-4 text-cyan-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+                    <span>BROADCAST MULTI-CHANNEL VU METERS & SOUND INDICATORS</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {cinemaResult ? `${cinemaResult.processor_type} ${cinemaResult.profile} Post-Uplift Spatial Energy` : `${layout} Discrete Speaker Array Calibration`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setIsAuditioning(!isAuditioning)}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-md cursor-pointer ${
+                    isAuditioning
+                      ? 'bg-emerald-500 text-black border-emerald-400 animate-pulse'
+                      : 'bg-slate-900 hover:bg-slate-800 text-cyan-300 border-cyan-500/40'
+                  }`}
+                >
+                  <Play className={`w-3.5 h-3.5 ${isAuditioning ? 'fill-current' : ''}`} />
+                  <span>{isAuditioning ? 'Auditioning Signal Active' : 'Audition In Room'}</span>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2 text-xs font-mono">
+            {/* Post-Uplift Spatial Energy Radar Metrics */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-[11px]">
+              <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-400 block text-[10px]">Center Dialogue Anchor:</span>
+                  <span className="text-cyan-400 font-bold text-xs">{cinemaResult ? '+3.5 dB (Dialogue Clarified)' : '35% Focus'}</span>
+                </div>
+                <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-md shadow-cyan-400 animate-pulse" />
+              </div>
+
+              <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-400 block text-[10px]">Front Stage Width (L/R):</span>
+                  <span className="text-emerald-400 font-bold text-xs">{cinemaResult ? 'Wide Stereo Bed' : '45% Pan Width'}</span>
+                </div>
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-md shadow-emerald-400" />
+              </div>
+
+              <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-400 block text-[10px]">Surround Envelopment:</span>
+                  <span className="text-purple-400 font-bold text-xs">{cinemaResult ? '90° Hilbert Decorrelated' : 'Diffuse Ambience'}</span>
+                </div>
+                <div className="w-2.5 h-2.5 rounded-full bg-purple-400 shadow-md shadow-purple-400" />
+              </div>
+
+              <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-400 block text-[10px]">Subwoofer Bass (.1 LFE):</span>
+                  <span className="text-amber-400 font-bold text-xs">{crossoverHz} Hz (Linkwitz-Riley 24dB)</span>
+                </div>
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-md shadow-amber-400 animate-pulse" />
+              </div>
+            </div>
+
+            {/* Segmented LED VU Meter Columns Grid */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2 pt-1">
               {speakers2D.map(spk => {
-                const gain = calculateGain(spk);
+                let gain = calculateGain(spk);
+                if (cinemaResult?.channel_levels && cinemaResult.channel_levels[spk.id]) {
+                  gain = cinemaResult.channel_levels[spk.id].gain_norm;
+                } else if (surroundResult?.channel_levels && surroundResult.channel_levels[spk.id]) {
+                  gain = surroundResult.channel_levels[spk.id].gain_norm;
+                }
+                if (isAuditioning) {
+                  gain = Math.max(0.08, Math.min(1.0, gain + Math.sin(Date.now() * 0.008 + spk.id.charCodeAt(0)) * 0.12));
+                }
                 const gainPct = Math.round(gain * 100);
+                const dbVal = Math.round(gain * 48 - 48);
+
                 return (
-                  <div key={spk.id} className="bg-slate-900/80 p-2 rounded-lg border border-slate-800 flex flex-col items-center space-y-1">
-                    <span className={`text-[10px] font-bold ${spk.isLfe ? 'text-amber-400' : spk.isHeight ? 'text-purple-400' : 'text-cyan-400'}`}>
-                      {spk.id}
-                    </span>
-                    <div className="w-full h-14 bg-black/60 rounded-md relative flex flex-col justify-end p-0.5 overflow-hidden">
+                  <div key={spk.id} className="bg-slate-900/80 p-2 rounded-xl border border-slate-800 flex flex-col items-center space-y-1.5 shadow-md">
+                    <div className="flex items-center space-x-1">
+                      <div className={`w-1.5 h-1.5 rounded-full ${gainPct > 80 ? 'bg-amber-400 animate-ping' : gainPct > 20 ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                      <span className={`text-[10px] font-bold ${spk.isLfe ? 'text-amber-400' : spk.isHeight ? 'text-purple-400' : 'text-cyan-400'}`}>
+                        {spk.id}
+                      </span>
+                    </div>
+
+                    {/* Segmented LED VU Bar */}
+                    <div className="w-full h-20 bg-black/80 rounded-md relative flex flex-col justify-end p-0.5 overflow-hidden border border-slate-800/80">
                       <div
-                        className={`w-full rounded-sm transition-all duration-100 ${
+                        className={`w-full rounded-sm transition-all duration-75 ${
                           spk.isLfe
-                            ? 'bg-gradient-to-t from-amber-600 to-amber-400'
+                            ? 'bg-gradient-to-t from-amber-600 via-amber-400 to-yellow-300'
                             : spk.isHeight
-                            ? 'bg-gradient-to-t from-purple-600 to-purple-400'
-                            : 'bg-gradient-to-t from-cyan-600 to-cyan-300'
+                            ? 'bg-gradient-to-t from-purple-600 via-purple-400 to-pink-300'
+                            : 'bg-gradient-to-t from-emerald-600 via-yellow-400 to-cyan-400'
                         }`}
                         style={{ height: `${gainPct}%` }}
                       />
+                      {/* Segment division lines */}
+                      <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20">
+                        {[...Array(6)].map((_, i) => (
+                          <div key={i} className="w-full h-px bg-white" />
+                        ))}
+                      </div>
                     </div>
-                    <span className="text-[9px] text-slate-400">{gainPct}%</span>
+
+                    <div className="text-[9px] text-slate-400 font-mono text-center leading-tight">
+                      <div>{dbVal > -48 ? `${dbVal} dB` : '-inf'}</div>
+                      <div className="text-[8px] text-slate-500">{gainPct}%</div>
+                    </div>
                   </div>
                 );
               })}
             </div>
+
           </div>
         </div>
 
@@ -955,6 +1073,18 @@ export default function SurroundStudio({
                       <span>Download {cinemaBrand === 'dolby' ? 'Dolby Bitstream (.ac3)' : 'DTS Bitstream (.dts)'} ({cinemaResult.bitstream_info?.bitrate})</span>
                     </a>
                   )}
+
+                  <button
+                    onClick={() => {
+                      const tgt = cinemaResult.channels_layout === '7.1.4' ? '7.1.4' : (cinemaResult.channels_layout === '7.1' ? '7.1' : '5.1');
+                      setLayout(tgt);
+                      setStudioSection('3d_room');
+                    }}
+                    className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-violet-600 hover:from-cyan-400 hover:to-violet-500 text-white font-mono text-xs font-bold transition-all shadow-lg shadow-cyan-500/20 cursor-pointer"
+                  >
+                    <Box className="w-4 h-4" />
+                    <span>Visualize Panning in 3D Room & VU Meters</span>
+                  </button>
                 </div>
               </div>
 

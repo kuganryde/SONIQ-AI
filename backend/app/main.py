@@ -467,6 +467,32 @@ async def cinema_process(req: CinemaProcessRequest):
                     bitstream_file = str(bitstream_out)
                     bitstream_url = f"/api/v1/audio/download/{bitstream_out.name}"
 
+            # Multi-channel acoustic telemetry for in-room VU meters
+            ch_names_map = {
+                6: ["L", "R", "C", "LFE", "Ls", "Rs"],
+                8: ["L", "R", "C", "LFE", "Ls", "Rs", "Rls", "Rrs"],
+                12: ["L", "R", "C", "LFE", "Ls", "Rs", "Rls", "Rrs", "Tfl", "Tfr", "Trl", "Trr"]
+            }
+            ch_names = ch_names_map.get(multichannel.shape[0], [f"CH{i+1}" for i in range(multichannel.shape[0])])
+            channel_levels = {}
+            for i, name in enumerate(ch_names):
+                if i < multichannel.shape[0]:
+                    ch_d = multichannel[i]
+                    rms = float(np.sqrt(np.mean(ch_d ** 2) + 1e-12))
+                    peak = float(np.max(np.abs(ch_d)))
+                    rms_db = round(float(20 * np.log10(max(rms, 1e-6))), 1)
+                    peak_db = round(float(20 * np.log10(max(peak, 1e-6))), 1)
+                    channel_levels[name] = {
+                        "abbr": name,
+                        "name": name,
+                        "channel_index": i,
+                        "rms_db": rms_db,
+                        "peak_db": peak_db,
+                        "gain_norm": round(float(min(1.0, max(0.05, (rms_db + 48.0) / 48.0))), 2),
+                        "is_lfe": name == "LFE",
+                        "is_active": rms_db > -55.0
+                    }
+
             # Quick Acoustic QC Analysis
             qc = AudioAnalyzer.full_audio_analysis(multichannel, sr)
 
@@ -486,6 +512,7 @@ async def cinema_process(req: CinemaProcessRequest):
                 "sample_rate_hz": sr,
                 "bit_depth": "24-bit",
                 "cinema_stats": stats,
+                "channel_levels": channel_levels,
                 "acoustic_qc": {
                     "integrated_lufs": qc["integrated_lufs"],
                     "true_peak_dbtp": qc["true_peak_dbtp"],

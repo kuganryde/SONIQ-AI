@@ -61,6 +61,27 @@ class SurroundEngineerAgent(BaseAudioAgent):
         # Speaker channel details
         speakers = SPEAKER_CONFIGS.get(target_layout, SPEAKER_CONFIGS[SurroundLayout.FIVE_POINT_ONE])
 
+        # Channel RMS & Peak Telemetry for In-Room VU Meters
+        channel_levels = {}
+        for ch_idx, spk in enumerate(speakers):
+            if ch_idx < surround_audio.shape[0]:
+                ch_data = surround_audio[ch_idx]
+                rms = float(np.sqrt(np.mean(ch_data ** 2) + 1e-12))
+                peak = float(np.max(np.abs(ch_data)))
+                rms_db = round(float(20 * np.log10(max(rms, 1e-6))), 1)
+                peak_db = round(float(20 * np.log10(max(peak, 1e-6))), 1)
+                abbr = spk.get("abbr", spk.get("name", f"CH{ch_idx+1}"))
+                channel_levels[abbr] = {
+                    "abbr": abbr,
+                    "name": spk.get("name", abbr),
+                    "channel_index": ch_idx,
+                    "rms_db": rms_db,
+                    "peak_db": peak_db,
+                    "gain_norm": round(float(min(1.0, max(0.05, (rms_db + 48.0) / 48.0))), 2),
+                    "is_lfe": "LFE" in abbr,
+                    "is_active": rms_db > -55.0
+                }
+
         result = {
             "agent_id": self.agent_id,
             "status": "COMPLETED",
@@ -73,6 +94,7 @@ class SurroundEngineerAgent(BaseAudioAgent):
             "channel_layout": target_layout,
             "coordinates": {"x": x, "y": y, "z": z},
             "speakers_configured": speakers,
+            "channel_levels": channel_levels,
             "bass_management": {
                 "crossover_hz": crossover_hz,
                 "lfe_headroom_boost": "+10 dB standard cinema alignment",
