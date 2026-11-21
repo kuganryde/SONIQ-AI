@@ -38,7 +38,7 @@ class Settings(BaseModel):
     SUPPORTED_SAMPLE_RATES: list[int] = [44100, 48000, 88200, 96000, 176400, 192000]
     SUPPORTED_BIT_DEPTHS: list[str] = ["16", "24", "32f"]
     
-    # Guarantee Non-Destructive Editing
+    # Sovereign Data Residency & Continuous Git Sync (srv1302021)
     NON_DESTRUCTIVE_STRICT: bool = True
 
 settings = Settings()
