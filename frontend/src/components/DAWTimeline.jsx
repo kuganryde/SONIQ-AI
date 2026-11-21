@@ -23,6 +23,7 @@ export default function DAWTimeline({
   onUpdateTrack,
   onAddTrack,
   onUploadFile,
+  onInsertSoundLogo,
   onClearSession,
   onLoadDemo,
   loadingDemo = false,
@@ -124,6 +125,17 @@ export default function DAWTimeline({
             <span>Add Audio Track</span>
           </button>
 
+          {onInsertSoundLogo && (
+            <button
+              onClick={onInsertSoundLogo}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-950/60 text-cyan-300 border border-cyan-800/60 hover:border-cyan-500/60 transition-colors cursor-pointer font-mono text-[11px]"
+              title="Insert official RYDETECH Sonic Ident directly into DAW timeline"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Insert Sound Logo</span>
+            </button>
+          )}
+
           {tracks.length > 0 && onClearSession && (
             <button
               onClick={() => {
@@ -182,6 +194,17 @@ export default function DAWTimeline({
                 <Plus className="w-4 h-4 text-slate-400" />
                 <span>Add Blank Track</span>
               </button>
+
+              {onInsertSoundLogo && (
+                <button
+                  onClick={onInsertSoundLogo}
+                  className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-800/80 hover:border-cyan-500 font-semibold text-xs transition-colors cursor-pointer"
+                  title="Insert official RYDETECH Sonic Ident directly into DAW timeline"
+                >
+                  <Sparkles className="w-4 h-4 text-cyan-400" />
+                  <span>Insert RYDETECH Sound Logo</span>
+                </button>
+              )}
             </div>
 
             <div className="mt-8 pt-6 border-t border-slate-800/80 flex items-center space-x-3 text-xs text-slate-500">

@@ -7,8 +7,9 @@ BACKEND_DIR = BASE_DIR / "backend"
 STORAGE_DIR = BACKEND_DIR / "storage"
 
 class Settings(BaseModel):
-    APP_NAME: str = "SONIQ AI"
+    APP_NAME: str = "RYDETECH SONIQ AI"
     APP_VERSION: str = "1.0.0"
+    BRAND_PARENT: str = "RYDETECH GLOBAL ENTERPRISE"
     HOST: str = "0.0.0.0"
     PORT: int = 8008
     ENVIRONMENT: str = "production"
@@ -20,6 +21,7 @@ class Settings(BaseModel):
     STEMS_DIR: Path = STORAGE_DIR / "stems"
     EXPORTS_DIR: Path = STORAGE_DIR / "exports"
     SYNTHS_DIR: Path = STORAGE_DIR / "synths"
+    BRAND_DIR: Path = STORAGE_DIR / "brand"
     
     # Database
     DATABASE_URL: str = f"sqlite:///{STORAGE_DIR}/soniq_ai.db"
@@ -42,5 +44,5 @@ class Settings(BaseModel):
 settings = Settings()
 
 # Ensure directories exist
-for p in [settings.UPLOAD_DIR, settings.PROCESSED_DIR, settings.STEMS_DIR, settings.EXPORTS_DIR, settings.SYNTHS_DIR]:
+for p in [settings.UPLOAD_DIR, settings.PROCESSED_DIR, settings.STEMS_DIR, settings.EXPORTS_DIR, settings.SYNTHS_DIR, settings.BRAND_DIR]:
     p.mkdir(parents=True, exist_ok=True)

@@ -10,8 +10,10 @@
 ```
 
 ### **Autonomous Professional Audio Production, 3D Spatial Engineering & Multi-Agent DAW**
-*Engineered for sovereign studio recording, 64-bit float DSP hardware emulation, 7.1.4 Dolby Atmos spatialization, and EBU R128 statutory mastering.*
+*Engineered by **RYDETECH GLOBAL ENTERPRISE** for sovereign studio recording, 64-bit float DSP hardware emulation, 7.1.4 Dolby Atmos spatialization, and EBU R128 statutory mastering.*
 
+[![Enterprise](https://img.shields.io/badge/Enterprise-RYDETECH_GLOBAL_ENTERPRISE-00f2fe?style=for-the-badge&logo=shield&logoColor=black)](https://github.com/kuganryde/SONIQ-AI)
+[![Sonic Ident](https://img.shields.io/badge/Sound_Logo-Sonic_Ident_24Bit_PCM-8b5cf6?style=for-the-badge&logo=soundcharts&logoColor=white)](https://github.com/kuganryde/SONIQ-AI)
 [![Build Status](https://img.shields.io/badge/Build-Passing-00f2fe?style=for-the-badge&logo=githubactions&logoColor=black)](https://github.com/kuganryde/SONIQ-AI)
 [![DSP Precision](https://img.shields.io/badge/DSP_Engine-64--Bit_Float_IEEE_754-a855f7?style=for-the-badge&logo=soundcharts&logoColor=white)](https://github.com/kuganryde/SONIQ-AI)
 [![Spatial Room](https://img.shields.io/badge/Spatial_3D-Three.js_WebGL_7.1.4_Atmos-00c853?style=for-the-badge&logo=three.js&logoColor=white)](https://github.com/kuganryde/SONIQ-AI)
@@ -35,15 +37,16 @@
 
 ## 🌟 Platform Overview
 
-**SONIQ AI** is a sovereign, web-accessible Digital Audio Workstation (DAW) and distributed audio processing environment designed for professional recording studios, mastering engineers, and post-production houses.
+**RYDETECH SONIQ AI** is a sovereign, web-accessible Digital Audio Workstation (DAW) and distributed audio processing environment engineered by **RYDETECH GLOBAL ENTERPRISE** for professional recording studios, mastering engineers, and cinema post-production facilities.
 
-Unlike ordinary browser prototypes or static audio players, SONIQ AI combines:
-- **Client-Side Low Latency DAW:** Interactive multitrack timeline with zero-latency Web Audio API playback, dynamic waveforms, and solo/mute buses.
+Unlike ordinary browser prototypes or static audio players, RYDETECH SONIQ AI combines:
+- **Official Sovereign Sound Logo (Sonic Ident):** Signature multi-harmonic acoustic brand mnemonic featuring 38Hz–65.4Hz sub-bass pitch glide, Cadd9 analog polyphonic pad swell, dynamic resonant filter sweep, crystal FM glass chime, and 3D binaural Schroeder diffusion, available via 1-click playback, synthesizers, and direct broadcast WAV delivery.
+- **Client-Side Low Latency DAW:** Interactive multitrack timeline with zero-latency Web Audio API playback, dynamic waveforms, solo/mute buses, and direct brand ident insertion.
 - **Server-Side 64-Bit Float Mathematical DSP:** Custom double-precision filters, optical dynamic compressors, lookahead brickwall limiters, and Moorer/Schroeder algorithmic reverberation.
 - **Interactive 3D Immersive Spatial Studio:** A WebGL / Three.js 3D room with full XYZ spatial placement, supporting **Stereo (2.0/2.1), Surround (5.1/7.1), and Dolby Atmos-compatible 12-channel height layouts (7.1.4)** with live **Binaural HRTF Headphone Virtualization**.
 - **Autonomous Multi-Agent AI Swarm:** 10 specialized agents coordinated by a local sovereign **`qwen2.5:3b`** model running on local Ollama.
 - **Guaranteed Non-Destructive Storage:** Master source recordings remain strictly read-only and immutable in segregated physical directories.
-- **Enterprise Abuse Guard:** In-memory sliding-window rate limiting, content-hashed acoustic caching, and CPU concurrency semaphore protection.
+- **Enterprise Abuse Guard & Malaysian PDPA 2010 Residency:** Host `srv1302021` strict data residency, in-memory sliding-window rate limiting, content-hashed acoustic caching, and CPU concurrency semaphore protection.
 
 ---
 

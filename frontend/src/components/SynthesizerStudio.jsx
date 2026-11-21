@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { apiUrl, safeFetchJson, resolveAudioUrl } from '../config/api';
-import { Piano, Disc, Sparkles, Download, Volume2, Play } from 'lucide-react';
+import { audioEngine } from '../audio/WebAudioEngine';
+import { Piano, Disc, Sparkles, Download, Volume2, Play, ShieldCheck, Radio } from 'lucide-react';
 
 export default function SynthesizerStudio({
   onAddTrackFromAudio
@@ -12,6 +13,10 @@ export default function SynthesizerStudio({
   const [waveform2, setWaveform2] = useState('square');
   const [detuneCents, setDetuneCents] = useState(8);
   const [cutoffHz, setCutoffHz] = useState(2400);
+
+  // Sound Logo State
+  const [logoSampleRate, setLogoSampleRate] = useState(48000);
+  const [logoDuration, setLogoDuration] = useState(3.2);
 
   // Drum step sequencer state (16 steps for 4 instruments)
   const [drumSteps, setDrumSteps] = useState({
@@ -100,6 +105,28 @@ export default function SynthesizerStudio({
     });
   };
 
+  const handleGenerateBrandSoundLogo = async () => {
+    setGenerating(true);
+    try {
+      const data = await safeFetchJson(apiUrl('/api/v1/brand/sound-logo/generate'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sample_rate: logoSampleRate,
+          duration_sec: logoDuration
+        })
+      });
+      setSynthResult(data);
+      if (onAddTrackFromAudio) {
+        onAddTrackFromAudio(data);
+      }
+    } catch (e) {
+      alert(`Sound logo synthesis error: ${e.message}`);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <div className="flex-1 p-6 space-y-6 overflow-y-auto max-w-[1700px] mx-auto">
       <div className="flex items-center justify-between pb-3 border-b border-slate-800">
@@ -132,10 +159,160 @@ export default function SynthesizerStudio({
           >
             808 DRUM MACHINE
           </button>
+          <button
+            onClick={() => setSynthType('sound_logo')}
+            className={`px-3 py-1 rounded-lg flex items-center space-x-1.5 transition-all ${synthType === 'sound_logo' ? 'bg-gradient-to-r from-cyan-400 to-violet-500 text-black font-bold shadow-md shadow-cyan-500/20' : 'text-cyan-400 hover:text-white border border-cyan-800/40'}`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>SOUND LOGO</span>
+          </button>
         </div>
       </div>
 
-      {/* Piano Roll Keyboard */}
+      {synthType === 'sound_logo' ? (
+        <div className="space-y-6">
+          {/* Main Sound Logo Card */}
+          <div className="bg-[#0b0e17] p-6 rounded-2xl border border-cyan-800/60 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-slate-800">
+              <div className="flex items-center space-x-3.5">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-400 to-violet-600 p-0.5 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                  <div className="w-full h-full bg-[#07090e] rounded-[10px] flex items-center justify-center">
+                    <img src="/rydetech_logo.svg" alt="RYDETECH Brand Logo" className="w-8 h-8 object-contain" />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h2 className="text-base font-bold text-white font-mono">
+                      RYDETECH SONIQ AI — Official Sound Logo (Sonic Ident)
+                    </h2>
+                    <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono text-[10px]">
+                      Sovereign Ident
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">
+                    Multi-harmonic acoustic branding mnemonic engineered for cinema trailers, broadcasts, and sovereign audio pipelines.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => audioEngine.playBrandSoundLogo()}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-700/60 hover:border-cyan-400 font-mono text-xs font-bold transition flex items-center space-x-2 cursor-pointer shadow-md"
+                >
+                  <Volume2 className="w-4 h-4 text-cyan-400" />
+                  <span>Audition Sonic Ident</span>
+                </button>
+
+                <button
+                  onClick={handleGenerateBrandSoundLogo}
+                  disabled={generating}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-mono text-xs font-bold transition flex items-center space-x-2 shadow-lg shadow-cyan-500/25 disabled:opacity-50 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-black stroke-[2.5]" />
+                  <span>{generating ? 'Synthesizing...' : 'Synthesize to DAW Timeline'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Architecture Decomposition */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mt-6">
+              <div className="p-3.5 rounded-xl bg-[#0e1320] border border-slate-800/80 space-y-1.5">
+                <div className="text-[10px] font-mono font-bold text-cyan-400 uppercase">Stage 01 • Sub Foundation</div>
+                <div className="text-xs font-bold text-white font-mono">Sub-Bass Glide</div>
+                <p className="text-[11px] text-slate-400">
+                  38Hz to 65.4Hz (C2) pitch glide with soft-clipping tape saturation.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#0e1320] border border-slate-800/80 space-y-1.5">
+                <div className="text-[10px] font-mono font-bold text-violet-400 uppercase">Stage 02 • Harmonic Core</div>
+                <div className="text-xs font-bold text-white font-mono">Cadd9 Poly Swell</div>
+                <p className="text-[11px] text-slate-400">
+                  C3, G3, C4, E4, G4, D5 chord with ±7 cents chorus detuning.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#0e1320] border border-slate-800/80 space-y-1.5">
+                <div className="text-[10px] font-mono font-bold text-emerald-400 uppercase">Stage 03 • Acoustic Motion</div>
+                <div className="text-xs font-bold text-white font-mono">Resonant Ladder Filter</div>
+                <p className="text-[11px] text-slate-400">
+                  4-pole dynamic low-pass sweep opening from 300Hz to 6.5kHz.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#0e1320] border border-slate-800/80 space-y-1.5">
+                <div className="text-[10px] font-mono font-bold text-amber-400 uppercase">Stage 04 • Crystalline Chime</div>
+                <div className="text-xs font-bold text-white font-mono">FM Glass Ident</div>
+                <p className="text-[11px] text-slate-400">
+                  Dual carrier C6/G6 + C7 ping with decaying FM index and stereo ping delays.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#0e1320] border border-slate-800/80 space-y-1.5">
+                <div className="text-[10px] font-mono font-bold text-rose-400 uppercase">Stage 05 • Spatial Depth</div>
+                <div className="text-xs font-bold text-white font-mono">Schroeder 3D Diffusion</div>
+                <p className="text-[11px] text-slate-400">
+                  Smooth diffuse decay tail resolving to complete digital silence at 3.2s.
+                </p>
+              </div>
+            </div>
+
+            {/* Custom Synthesis Parameters */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-800/80">
+              <div className="bg-[#0e1320] p-4 rounded-xl border border-slate-800 font-mono text-xs space-y-2">
+                <label className="text-slate-400 font-bold text-[11px]">Sampling Resolution</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[44100, 48000, 96000].map(sr => (
+                    <button
+                      key={sr}
+                      onClick={() => setLogoSampleRate(sr)}
+                      className={`py-1.5 px-2 rounded-lg text-center text-xs transition cursor-pointer ${
+                        logoSampleRate === sr
+                          ? 'bg-cyan-500 text-black font-bold shadow'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
+                      }`}
+                    >
+                      {sr === 44100 ? '44.1k' : sr === 48000 ? '48k' : '96k'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-[#0e1320] p-4 rounded-xl border border-slate-800 font-mono text-xs space-y-2">
+                <div className="flex justify-between text-slate-400 font-bold text-[11px]">
+                  <span>Duration</span>
+                  <span className="text-cyan-400 font-mono">{logoDuration}s</span>
+                </div>
+                <input
+                  type="range"
+                  min="2.0"
+                  max="6.0"
+                  step="0.2"
+                  value={logoDuration}
+                  onChange={(e) => setLogoDuration(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-slate-800 rounded cursor-pointer mt-2"
+                />
+              </div>
+
+              <div className="bg-[#0e1320] p-4 rounded-xl border border-slate-800 font-mono text-xs flex flex-col justify-between">
+                <div className="text-[11px] text-slate-400">
+                  Broadcast Spec: EBU R128 (-14.4 LUFS) • True-Peak -1.0 dBTP
+                </div>
+                <div className="flex items-center space-x-2 text-[10px] text-emerald-400 mt-2">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Sovereign Enclave Certified (srv1302021)</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Piano Roll Keyboard */}
       <div className="bg-[#0b0e17] p-5 rounded-2xl border border-slate-800 shadow-xl space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-mono font-bold text-cyan-300">
@@ -301,6 +478,8 @@ export default function SynthesizerStudio({
             ))}
           </div>
         </div>
+      )}
+      </>
       )}
 
       {/* Render Result Preview */}

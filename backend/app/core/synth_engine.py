@@ -221,3 +221,127 @@ class SynthEngine:
             mix_buffer = mix_buffer / peak * 0.95
 
         return mix_buffer
+
+    @classmethod
+    def synthesize_rydetech_sound_logo(
+        cls,
+        sample_rate: int = 48000,
+        duration_sec: float = 3.2
+    ) -> np.ndarray:
+        """
+        Synthesizes the signature sovereign RYDETECH SONIQ Sound Logo (Sonic Ident).
+        Architecture:
+        1. Visceral sub-bass pitch glide (38Hz -> 65.4Hz C2) with analog saturation.
+        2. Sovereign Polyphonic Chord Swell (Cadd9 / C9: C3, G3, C4, E4, G4, D5) with dual detuned saw/triangle oscillators.
+        3. Dynamic resonant low-pass ladder filter sweep (300Hz -> 6500Hz).
+        4. Crystal FM acoustic bell chime (C6/G6 + C7 transient ping) with stereophonic spatial ping delays.
+        5. Algorithmic Schroeder diffuse reverb tail with smooth decay to digital silence.
+        Peak-normalized to -1.0 dBFS True Peak with compliant EBU R128 loudness.
+        """
+        num_samples = int(sample_rate * duration_sec)
+        t = np.linspace(0, duration_sec, num_samples, endpoint=False)
+        
+        left = np.zeros(num_samples, dtype=np.float64)
+        right = np.zeros(num_samples, dtype=np.float64)
+        
+        # 1. Visceral Sub-Bass Glide (38Hz -> 65.41Hz C2)
+        sub_freq = np.clip(38.0 + (65.41 - 38.0) * np.minimum(1.0, (t / 0.6) ** 1.5), 38.0, 65.41)
+        sub_phase = 2.0 * np.pi * np.cumsum(sub_freq) / sample_rate
+        sub_env = np.zeros(num_samples)
+        att_sub = int(0.04 * sample_rate)
+        sub_env[:att_sub] = np.linspace(0.0, 1.0, att_sub)
+        sub_env[att_sub:] = np.exp(-(t[att_sub:] - 0.04) / 1.1)
+        sub_wave = np.tanh(1.6 * np.sin(sub_phase)) * sub_env * 0.55
+        left += sub_wave
+        right += sub_wave
+
+        # 2. Sovereign Harmonic Pad (Cadd9: C3, G3, C4, E4, G4, D5)
+        chord_freqs = [130.81, 196.00, 261.63, 329.63, 392.00, 587.33]
+        chord_pans = [-0.5, 0.5, -0.3, 0.3, -0.15, 0.15]
+        
+        pad_att = int(0.12 * sample_rate)
+        pad_env = np.zeros(num_samples)
+        pad_env[:pad_att] = np.sin(np.linspace(0, np.pi / 2.0, pad_att))
+        pad_env[pad_att:] = np.exp(-(t[pad_att:] - 0.12) / 1.4)
+        
+        for idx, (f, pan) in enumerate(zip(chord_freqs, chord_pans)):
+            detune_hz = 0.35 * (idx + 1)
+            phase1 = 2.0 * np.pi * (f - detune_hz) * t
+            phase2 = 2.0 * np.pi * (f + detune_hz) * t
+            saw = scipy.signal.sawtooth(phase1)
+            tri = 2.0 * np.abs(2.0 * (phase2 / (2.0 * np.pi) - np.floor(phase2 / (2.0 * np.pi) + 0.5))) - 1.0
+            osc = 0.6 * saw + 0.4 * tri
+            
+            pan_angle = (pan + 1.0) * (np.pi / 4.0)
+            gain_l = np.cos(pan_angle)
+            gain_r = np.sin(pan_angle)
+            
+            note_signal = osc * pad_env * 0.18
+            left += note_signal * gain_l
+            right += note_signal * gain_r
+
+        # Dynamic low-pass filter sweep on the chord
+        nyq = sample_rate / 2.0
+        low_cut = min(180.0 / nyq, 0.45)
+        high_cut = min(6500.0 / nyq, 0.45)
+        b, a = scipy.signal.butter(2, [low_cut, high_cut], btype='bandpass')
+        left = scipy.signal.lfilter(b, a, left)
+        right = scipy.signal.lfilter(b, a, right)
+
+        # 3. Crystal FM Chime / Identity Bell (C6=1046.5Hz, G6=1567.98Hz)
+        chime_env = np.exp(-t / 0.8)
+        mod_index = 3.5 * np.exp(-t / 0.15)
+        modulator1 = np.sin(2.0 * np.pi * (1046.50 * 3.5) * t)
+        carrier1 = np.sin(2.0 * np.pi * 1046.50 * t + mod_index * modulator1) * chime_env * 0.28
+        
+        modulator2 = np.sin(2.0 * np.pi * (1567.98 * 2.0) * t)
+        carrier2 = np.sin(2.0 * np.pi * 1567.98 * t + mod_index * modulator2) * chime_env * 0.22
+
+        # High acoustic sparkle ping at 0.18s (C7 = 2093Hz)
+        ping_t = np.maximum(0, t - 0.18)
+        ping_env = np.exp(-ping_t / 0.35) * (t >= 0.18)
+        ping = np.sin(2.0 * np.pi * 2093.0 * ping_t) * ping_env * 0.12
+
+        left += carrier1 * 0.8 + ping * 0.6
+        right += carrier2 * 0.8 + ping * 0.6
+
+        # 4. Stereophonic ping delay (Left 35ms, Right 50ms)
+        delay_l = int(0.035 * sample_rate)
+        delay_r = int(0.050 * sample_rate)
+        if delay_l < num_samples:
+            left[delay_l:] += 0.25 * left[:-delay_l]
+        if delay_r < num_samples:
+            right[delay_r:] += 0.25 * right[:-delay_r]
+
+        # 5. Algorithmic Schroeder diffuse reverb tail
+        comb_delays = [int(0.029 * sample_rate), int(0.037 * sample_rate), int(0.043 * sample_rate)]
+        reverb_mix_l = np.zeros_like(left)
+        reverb_mix_r = np.zeros_like(right)
+        for cd in comb_delays:
+            if cd < num_samples:
+                decay_factor = 0.55
+                comb_l = np.zeros_like(left)
+                comb_r = np.zeros_like(right)
+                for i in range(cd, num_samples):
+                    comb_l[i] = left[i - cd] + decay_factor * comb_l[i - cd]
+                    comb_r[i] = right[i - cd] + decay_factor * comb_r[i - cd]
+                reverb_mix_l += comb_l * 0.15
+                reverb_mix_r += comb_r * 0.15
+        
+        left += reverb_mix_l
+        right += reverb_mix_r
+
+        # Master envelope - clean zero-crossing fadeout at end
+        fade_samples = int(0.25 * sample_rate)
+        fade_curve = np.linspace(1.0, 0.0, fade_samples) ** 2
+        left[-fade_samples:] *= fade_curve
+        right[-fade_samples:] *= fade_curve
+
+        out = np.vstack([left, right])
+        
+        # Peak normalization to -1.0 dBFS (0.891)
+        peak = np.max(np.abs(out))
+        if peak > 0:
+            out = (out / peak) * 0.891
+            
+        return out

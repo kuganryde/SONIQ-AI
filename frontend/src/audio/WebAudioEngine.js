@@ -14,6 +14,21 @@ class WebAudioEngine {
     this.isBinauralMode = false;
     this.spatialPos = { x: 0.0, y: 0.4, z: 0.0 };
     this.spatialPannerNode = null;
+    this.brandSoundLogoBuffer = null;
+    this.isSoundLogoPlaying = false;
+    this.soundLogoListeners = new Set();
+  }
+
+  onSoundLogoStateChange(cb) {
+    this.soundLogoListeners.add(cb);
+    return () => this.soundLogoListeners.delete(cb);
+  }
+
+  notifySoundLogo(isPlaying) {
+    this.isSoundLogoPlaying = isPlaying;
+    this.soundLogoListeners.forEach(cb => {
+      try { cb(isPlaying); } catch (_) {}
+    });
   }
 
   init() {
@@ -270,6 +285,135 @@ class WebAudioEngine {
       rms: Math.round(rmsDb),
       fftData: freqData
     };
+  }
+
+  // Official RYDETECH SONIQ Brand Sound Logo (Sonic Ident)
+  async playBrandSoundLogo() {
+    this.init();
+    if (this.ctx.state === 'suspended') {
+      try { await this.ctx.resume(); } catch (_) {}
+    }
+    this.notifySoundLogo(true);
+
+    try {
+      let buffer = this.brandSoundLogoBuffer;
+      if (!buffer) {
+        // Try local static asset first (instant zero-latency)
+        let resp = await fetch('/rydetech_soniq_sound_logo.wav').catch(() => null);
+        if (!resp || !resp.ok) {
+          resp = await fetch(resolveAudioUrl('/api/v1/audio/brand/sound-logo.wav')).catch(() => null);
+        }
+        if (resp && resp.ok) {
+          const arr = await resp.arrayBuffer();
+          buffer = await this.ctx.decodeAudioData(arr);
+          this.brandSoundLogoBuffer = buffer;
+        }
+      }
+
+      if (buffer) {
+        const src = this.ctx.createBufferSource();
+        src.buffer = buffer;
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.95, this.ctx.currentTime);
+        src.connect(gain);
+        gain.connect(this.masterGain || this.ctx.destination);
+        src.onended = () => {
+          this.notifySoundLogo(false);
+        };
+        src.start(0);
+        return;
+      }
+    } catch (err) {
+      console.warn("WAV sound logo playback failed, switching to live WebAudio synthesizer:", err);
+    }
+
+    // High-Fidelity Web Audio Native Synthesizer Fallback
+    this.synthesizeLiveBrandSoundLogo();
+  }
+
+  synthesizeLiveBrandSoundLogo() {
+    this.init();
+    const t0 = this.ctx.currentTime;
+    const dur = 3.2;
+
+    const masterGain = this.ctx.createGain();
+    masterGain.gain.setValueAtTime(0.85, t0);
+    masterGain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    masterGain.connect(this.masterGain || this.ctx.destination);
+
+    // 1. Sub-Bass Glide (38Hz -> 65.4Hz)
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(38, t0);
+    subOsc.frequency.exponentialRampToValueAtTime(65.4, t0 + 0.6);
+    subGain.gain.setValueAtTime(0.001, t0);
+    subGain.gain.linearRampToValueAtTime(0.6, t0 + 0.05);
+    subGain.gain.exponentialRampToValueAtTime(0.001, t0 + 1.8);
+    subOsc.connect(subGain);
+    subGain.connect(masterGain);
+    subOsc.start(t0);
+    subOsc.stop(t0 + 2.0);
+
+    // 2. Majestic Chord Swell (Cadd9: C3, G3, C4, E4, G4, D5)
+    const notes = [130.81, 196.00, 261.63, 329.63, 392.00, 587.33];
+    const pans = [-0.6, 0.6, -0.3, 0.3, -0.15, 0.15];
+    
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 2.0;
+    filter.frequency.setValueAtTime(280, t0);
+    filter.frequency.exponentialRampToValueAtTime(5400, t0 + 0.8);
+    filter.frequency.exponentialRampToValueAtTime(900, t0 + dur);
+    filter.connect(masterGain);
+
+    notes.forEach((freq, idx) => {
+      const osc = this.ctx.createOscillator();
+      const panNode = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+      const noteGain = this.ctx.createGain();
+
+      osc.type = idx % 2 === 0 ? 'sawtooth' : 'triangle';
+      osc.frequency.setValueAtTime(freq, t0);
+
+      // Micro-detune
+      osc.detune.setValueAtTime((idx - 2.5) * 6, t0);
+
+      noteGain.gain.setValueAtTime(0.001, t0);
+      noteGain.gain.linearRampToValueAtTime(0.18, t0 + 0.15);
+      noteGain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+
+      if (panNode) {
+        panNode.pan.setValueAtTime(pans[idx], t0);
+        osc.connect(noteGain);
+        noteGain.connect(panNode);
+        panNode.connect(filter);
+      } else {
+        osc.connect(noteGain);
+        noteGain.connect(filter);
+      }
+
+      osc.start(t0);
+      osc.stop(t0 + dur);
+    });
+
+    // 3. High Crystal Chime (C6 1046.5Hz & G6 1567.98Hz)
+    [1046.5, 1567.98].forEach((chimeFreq, i) => {
+      const chimeOsc = this.ctx.createOscillator();
+      const chimeGain = this.ctx.createGain();
+      chimeOsc.type = 'sine';
+      chimeOsc.frequency.setValueAtTime(chimeFreq, t0);
+      chimeGain.gain.setValueAtTime(0.001, t0);
+      chimeGain.gain.linearRampToValueAtTime(0.2, t0 + 0.02 + i * 0.04);
+      chimeGain.gain.exponentialRampToValueAtTime(0.001, t0 + 1.2);
+      chimeOsc.connect(chimeGain);
+      chimeGain.connect(masterGain);
+      chimeOsc.start(t0);
+      chimeOsc.stop(t0 + 1.4);
+    });
+
+    setTimeout(() => {
+      this.notifySoundLogo(false);
+    }, dur * 1000);
   }
 
   // Live Microphone Recording

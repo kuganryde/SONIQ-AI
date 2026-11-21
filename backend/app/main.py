@@ -45,19 +45,41 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("soniq.main")
 
 
+def _ensure_brand_sound_logo(sample_rate: int = 48000, duration_sec: float = 3.2) -> Path:
+    """Ensures the signature sovereign RYDETECH SONIQ Sound Logo is synthesized and cached."""
+    brand_file = settings.BRAND_DIR / "rydetech_soniq_sound_logo.wav"
+    if not brand_file.exists() or brand_file.stat().st_size == 0:
+        logger.info("Synthesizing signature RYDETECH SONIQ Sound Logo (Sonic Ident)...")
+        audio = SynthEngine.synthesize_rydetech_sound_logo(sample_rate=sample_rate, duration_sec=duration_sec)
+        AudioIO.write_audio(audio, brand_file, sample_rate=sample_rate, bit_depth="24", format_type="WAV")
+    
+    # Also mirror into frontend public directory for instant zero-latency static web serving
+    frontend_public = Path("/root/soniq-ai/frontend/public")
+    if frontend_public.exists():
+        public_logo = frontend_public / "rydetech_soniq_sound_logo.wav"
+        if not public_logo.exists() or public_logo.stat().st_size != brand_file.stat().st_size:
+            shutil.copy2(brand_file, public_logo)
+    return brand_file
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Initializing SONIQ AI Autonomous Professional Audio Platform...")
+    logger.info("Initializing RYDETECH SONIQ AI Sovereign Professional Audio Platform...")
     # Prune stale temporary audio derivatives (preserves immutable uploads/)
     pruned = AudioCacheManager.prune_temporary_storage(settings.STORAGE_DIR, max_age_hours=48)
     logger.info(f"Storage resource check: pruned {pruned} temporary stale files.")
+    try:
+        _ensure_brand_sound_logo()
+        logger.info("RYDETECH SONIQ Sound Logo (Sonic Ident) ready in storage and public assets.")
+    except Exception as e:
+        logger.error(f"Failed to generate initial sound logo: {e}")
     yield
-    logger.info("Shutting down SONIQ AI Platform.")
+    logger.info("Shutting down RYDETECH SONIQ AI Platform.")
 
 
 app = FastAPI(
-    title="SONIQ AI: Autonomous Professional Audio Production & Surround Sound Platform",
-    description="Studio-grade Digital Audio Workstation, 64-bit DSP, 5.1/7.1 Surround, Mastering, and Multi-Agent AI.",
+    title="RYDETECH SONIQ AI: Autonomous Professional Audio Production & Surround Sound Platform",
+    description="Studio-grade Digital Audio Workstation, 64-bit DSP, 5.1/7.1 Surround, Mastering, and Multi-Agent AI by RYDETECH GLOBAL ENTERPRISE.",
     version=settings.APP_VERSION,
     lifespan=lifespan
 )
@@ -101,6 +123,11 @@ class SynthGenerateRequest(BaseModel):
     waveform_2: str = "square"
     detune_cents: float = 8.0
     cutoff_hz: float = 2400.0
+
+
+class SoundLogoGenerateRequest(BaseModel):
+    sample_rate: int = Field(48000, description="Sampling rate in Hz (44100, 48000, 96000)")
+    duration_sec: float = Field(3.2, description="Duration of sound logo in seconds (2.0 to 6.0)")
 
 
 class SurroundProcessRequest(BaseModel):
@@ -225,7 +252,7 @@ async def upload_audio(file: UploadFile = File(...)):
 @app.head("/api/v1/audio/download/{filename}")
 async def download_audio(filename: str):
     """Direct non-destructive download of uploaded, processed, or exported audio files."""
-    for folder in [settings.EXPORTS_DIR, settings.PROCESSED_DIR, settings.STEMS_DIR, settings.UPLOAD_DIR, settings.SYNTHS_DIR]:
+    for folder in [settings.BRAND_DIR, settings.EXPORTS_DIR, settings.PROCESSED_DIR, settings.STEMS_DIR, settings.UPLOAD_DIR, settings.SYNTHS_DIR]:
         target = folder / filename
         if target.exists():
             return FileResponse(
@@ -944,6 +971,111 @@ async def load_demo_project():
             "metrics": AudioAnalyzer.full_audio_analysis(master_mix, sr)
         },
         "tracks": tracks_resp
+    }
+
+
+# =========================================================================
+# RYDETECH Sovereign Brand & Sound Logo Suite
+# =========================================================================
+
+@app.get("/api/v1/brand/info")
+async def get_brand_info():
+    """Returns official RYDETECH GLOBAL ENTERPRISE brand specification and sovereign telemetry."""
+    brand_file = _ensure_brand_sound_logo()
+    return {
+        "brand_name": "RYDETECH SONIQ AI",
+        "parent_organization": settings.BRAND_PARENT,
+        "product_tagline": "Autonomous Studio DAW & Spatial Audio Architecture",
+        "infrastructure": {
+            "node": "srv1302021",
+            "enclave": "Sovereign Enterprise Audio Enclave",
+            "compliance": "Malaysian PDPA 2010 Statutory Residency Compliant",
+            "dsp_engine": "64-bit Double-Precision IEEE 754 Float Math",
+            "surround_support": ["2.0 Stereo", "2.1 Cinema", "5.1 Surround", "7.1 Surround", "7.1.4 Dolby Atmos"]
+        },
+        "sound_logo": {
+            "name": "RYDETECH Sonic Ident (Sound Logo)",
+            "duration_seconds": 3.2,
+            "sample_rate_hz": 48000,
+            "bit_depth": "24-bit PCM",
+            "channels": 2,
+            "loudness_target": "-14.4 LUFS (EBU R128 Compliant)",
+            "streaming_url": "/api/v1/audio/brand/sound-logo.wav",
+            "download_url": "/api/v1/audio/brand/sound-logo.wav"
+        }
+    }
+
+
+@app.get("/api/v1/brand/sound-logo")
+async def get_brand_sound_logo():
+    """Retrieves technical acoustic metadata and waveform peaks for the official RYDETECH SONIQ Sound Logo."""
+    brand_file = _ensure_brand_sound_logo()
+    audio, sr = AudioIO.load_audio(brand_file)
+    peaks = AudioAnalyzer.generate_waveform_peaks(audio, num_points=120)
+    analysis = AudioAnalyzer.full_audio_analysis(audio, sr)
+    return {
+        "name": "RYDETECH SONIQ Sound Logo",
+        "category": "Brand Ident",
+        "color": "#00f2fe",
+        "file_path": str(brand_file),
+        "streaming_url": "/api/v1/audio/brand/sound-logo.wav",
+        "download_url": "/api/v1/audio/brand/sound-logo.wav",
+        "sample_rate": sr,
+        "bit_depth": "24-bit",
+        "duration_seconds": round(audio.shape[1] / sr, 2),
+        "waveform_preview": peaks,
+        "metrics": analysis
+    }
+
+
+@app.get("/api/v1/audio/brand/sound-logo.wav")
+@app.head("/api/v1/audio/brand/sound-logo.wav")
+async def stream_brand_sound_logo():
+    """Direct streaming of master 24-bit 48kHz RYDETECH SONIQ Sound Logo WAV."""
+    brand_file = _ensure_brand_sound_logo()
+    return FileResponse(
+        brand_file,
+        media_type="audio/wav",
+        filename="rydetech_soniq_sound_logo.wav",
+        headers={
+            "Cache-Control": "public, max-age=86400",
+            "X-Brand": "RYDETECH GLOBAL ENTERPRISE",
+            "X-Product": "RYDETECH SONIQ AI",
+            "X-Data-Residency": "Malaysia PDPA 2010 Compliant"
+        }
+    )
+
+
+@app.post("/api/v1/brand/sound-logo/generate")
+async def generate_brand_sound_logo(req: SoundLogoGenerateRequest = SoundLogoGenerateRequest()):
+    """
+    Generates a high-precision RYDETECH Sound Logo audio asset and formats it as a multitrack timeline track.
+    """
+    sr = req.sample_rate if req.sample_rate in settings.SUPPORTED_SAMPLE_RATES else 48000
+    dur = max(1.5, min(req.duration_sec, 8.0))
+    audio = SynthEngine.synthesize_rydetech_sound_logo(sample_rate=sr, duration_sec=dur)
+    
+    unique_name = f"rydetech_sound_logo_{sr}Hz_{uuid.uuid4().hex[:6]}.wav"
+    out_path = settings.BRAND_DIR / unique_name
+    AudioIO.write_audio(audio, out_path, sample_rate=sr, bit_depth="24", format_type="WAV")
+    peaks = AudioAnalyzer.generate_waveform_peaks(audio, num_points=120)
+    
+    return {
+        "id": f"Track_Brand_SoundLogo_{uuid.uuid4().hex[:6]}",
+        "name": "RYDETECH Sonic Ident (Sound Logo)",
+        "category": "Brand",
+        "color": "#00f2fe",
+        "file_path": str(out_path),
+        "download_url": f"/api/v1/audio/download/{unique_name}",
+        "streaming_url": f"/api/v1/audio/brand/sound-logo.wav",
+        "volume_db": "0.0 dB",
+        "volume": 1.0,
+        "pan": 0.0,
+        "mute": False,
+        "solo": False,
+        "waveform": peaks,
+        "sample_rate": sr,
+        "duration_seconds": dur
     }
 
 

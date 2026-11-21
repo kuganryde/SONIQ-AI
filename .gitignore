@@ -12,6 +12,8 @@ backend/storage/exports/*
 !backend/storage/exports/.gitkeep
 backend/storage/synths/*
 !backend/storage/synths/.gitkeep
+backend/storage/brand/*
+!backend/storage/brand/.gitkeep
 __pycache__/
 *.pyc
 .DS_Store

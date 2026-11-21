@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0e1726" />
+      <stop offset="100%" stop-color="#06080e" />
+    </radialGradient>
+
+    <!-- Neon Rim Gradient -->
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="50%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#a855f7" />
+    </linearGradient>
+
+    <!-- Shield Inner Gradient -->
+    <linearGradient id="shieldGrad" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+
+    <!-- Sonic Wave Gradients -->
+    <linearGradient id="sonicCyan" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="50%" stop-color="#00f2fe" />
+      <stop offset="100%" stop-color="#67e8f9" />
+    </linearGradient>
+
+    <linearGradient id="sonicViolet" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="50%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#c084fc" />
+    </linearGradient>
+
+    <!-- Soft Glow Filter -->
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Base Rounded Hexagon Shield -->
+  <polygon points="256,28 450,118 450,394 256,484 62,394 62,118" 
+           fill="url(#shieldGrad)" 
+           stroke="url(#rimGrad)" 
+           stroke-width="14" 
+           stroke-linejoin="round" />
+
+  <!-- Inner Subtle Hexagon Inset Border -->
+  <polygon points="256,54 426,134 426,378 256,458 86,378 86,134" 
+           fill="none" 
+           stroke="#1e293b" 
+           stroke-width="4" 
+           stroke-linejoin="round" />
+
+  <!-- Stylized Sovereign Acoustic Waves & 'R' + 'S' Architecture -->
+  <g filter="url(#neonGlow)">
+    <!-- Left Vertical Anchor Stem (part of 'R') -->
+    <rect x="148" y="152" width="28" height="208" rx="14" fill="url(#sonicCyan)" />
+
+    <!-- Waveform Frequency Bars (representing live acoustic DSP) -->
+    <!-- Bar 1 (Sub 40Hz) -->
+    <rect x="194" y="220" width="18" height="72" rx="9" fill="url(#sonicCyan)" />
+    <!-- Bar 2 (Low 120Hz) -->
+    <rect x="226" y="180" width="18" height="152" rx="9" fill="url(#sonicCyan)" />
+    <!-- Bar 3 (Center Apex 1kHz) -->
+    <rect x="258" y="140" width="22" height="232" rx="11" fill="url(#rimGrad)" />
+    <!-- Bar 4 (Air 5kHz) -->
+    <rect x="294" y="180" width="18" height="152" rx="9" fill="url(#sonicViolet)" />
+    <!-- Bar 5 (High 16kHz) -->
+    <rect x="326" y="220" width="18" height="72" rx="9" fill="url(#sonicViolet)" />
+
+    <!-- Right Dynamic Spatial Arc (Completing the 'S' sonic wave) -->
+    <path d="M 320,165 C 380,185 390,240 340,265 C 395,290 380,350 320,365" 
+          fill="none" 
+          stroke="url(#sonicViolet)" 
+          stroke-width="24" 
+          stroke-linecap="round" />
+  </g>
+
+  <!-- Center Core Sound Origin Impulse Dot -->
+  <circle cx="256" cy="256" r="10" fill="#ffffff" filter="url(#neonGlow)" />
+</svg>

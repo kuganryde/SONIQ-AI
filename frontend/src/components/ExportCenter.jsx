@@ -220,6 +220,57 @@ export default function ExportCenter({
         </div>
       )}
 
+      {/* Official Sovereign Brand Assets & Sound Logo Package */}
+      <div className="bg-[#0b0e17] p-5 rounded-2xl border border-slate-800 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-800 flex items-center justify-center">
+              <img src="/rydetech_logo.svg" alt="RYDETECH Logo" className="w-5 h-5 object-contain" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold font-mono text-white">
+                RYDETECH SONIQ Sovereign Brand & Sound Logo Package
+              </h3>
+              <p className="text-[10px] text-slate-400 font-mono">
+                Official audio sonic idents and vector identity marks for studio deliverables and broadcast packages.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <a
+              href="/rydetech_soniq_sound_logo.wav"
+              download="rydetech_soniq_sound_logo.wav"
+              className="px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-mono font-bold flex items-center space-x-1.5 transition"
+            >
+              <DownloadCloud className="w-3.5 h-3.5" />
+              <span>Download Master Sound Logo (WAV)</span>
+            </a>
+
+            <a
+              href="/rydetech_logo.svg"
+              download="rydetech_logo.svg"
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-mono flex items-center space-x-1.5 transition"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Vector Logo (SVG)</span>
+            </a>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] font-mono text-slate-400">
+          <div className="p-2.5 rounded-lg bg-slate-900/50 border border-slate-800/80">
+            <span className="text-slate-300 font-bold">Sound Logo Audio Spec:</span> 48,000 Hz, 24-bit PCM Stereo, EBU R128 (-14.4 LUFS)
+          </div>
+          <div className="p-2.5 rounded-lg bg-slate-900/50 border border-slate-800/80">
+            <span className="text-slate-300 font-bold">Residency & Node:</span> srv1302021 (Malaysian PDPA 2010 Statutory Enclave)
+          </div>
+          <div className="p-2.5 rounded-lg bg-slate-900/50 border border-slate-800/80">
+            <span className="text-slate-300 font-bold">Parent Enterprise:</span> RYDETECH GLOBAL ENTERPRISE
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }

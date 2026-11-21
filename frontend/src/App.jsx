@@ -228,6 +228,36 @@ export default function App() {
     }
   };
 
+  const handleInsertSoundLogo = async () => {
+    try {
+      const data = await safeFetchJson(apiUrl('/api/v1/brand/sound-logo'));
+      const newId = `Track_SoundLogo_${Date.now()}`;
+      const newTrack = {
+        id: newId,
+        name: 'RYDETECH Sonic Ident (Sound Logo)',
+        category: 'Brand Logo',
+        color: '#00f2fe',
+        file_path: data.file_path,
+        download_url: data.download_url,
+        volume_db: '0.0 dB',
+        volume: 1.0,
+        pan: 0.0,
+        mute: false,
+        solo: false,
+        waveform: data.waveform_preview || []
+      };
+      setTracks(prev => [...prev, newTrack]);
+      setActiveTrackId(newId);
+      setActiveFile({ file_path: data.file_path });
+      if (data.download_url) {
+        await audioEngine.loadTrackAudio(newId, resolveAudioUrl(data.download_url));
+      }
+    } catch (e) {
+      console.error("Failed to insert brand sound logo:", e);
+      alert(`Brand Sound Logo: ${e.message}`);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-[#07090e] text-slate-100">
       {/* Top Navbar */}
@@ -261,6 +291,7 @@ export default function App() {
               onUpdateTrack={handleUpdateTrack}
               onAddTrack={handleAddTrack}
               onUploadFile={handleUploadFile}
+              onInsertSoundLogo={handleInsertSoundLogo}
               onClearSession={handleClearSession}
               onLoadDemo={handleLoadDemo}
               loadingDemo={loadingDemo}
