@@ -21,7 +21,7 @@ from app.core.dsp_engine import DSPOps
 from app.core.export_engine import ExportEngine
 from app.core.mastering_engine import MASTERING_PROFILES, MasteringEngine
 from app.core.surround_engine import SurroundLayout, SurroundPannerEngine
-from app.core.cinema_processor import DolbyProcessor, DTSProcessor
+from app.core.cinema_processor import DolbyProcessor, DTSProcessor, DolbyCodec, DTSCodec
 from app.core.synth_engine import SynthEngine
 from app.agents.production_manager import ProductionManagerAgent
 from app.agents.audio_analyst import AudioAnalystAgent
@@ -138,6 +138,22 @@ class CinemaProcessRequest(BaseModel):
     dialogue_boost_db: float = 3.0
     crossover_hz: float = 80.0
     generate_binaural: bool = True
+    encode_bitstream: bool = True
+    bitstream_bitrate: Optional[str] = None
+
+
+class CinemaEncodeRequest(BaseModel):
+    file_path: str
+    codec: str = "ac3" # "ac3", "eac3", "dts"
+    bitrate: Optional[str] = None # e.g. "640k" or "1536k"
+    dialnorm_db: Optional[int] = -27
+    output_filename: Optional[str] = None
+
+
+class CinemaDecodeRequest(BaseModel):
+    file_path: str
+    output_format: str = "WAV" # "WAV" or "FLAC"
+    bit_depth: str = "24"
 
 
 class OrchestrateRequest(BaseModel):
@@ -424,6 +440,33 @@ async def cinema_process(req: CinemaProcessRequest):
                 bin_p = str(bin_actual)
                 bin_url = f"/api/v1/audio/download/{bin_actual.name}"
 
+            # Direct Certified Bitstream Generation (Dolby AC-3/E-AC-3 or DTS)
+            bitstream_info = None
+            bitstream_file = None
+            bitstream_url = None
+            if req.encode_bitstream:
+                if proc_type == "dolby":
+                    dolby_fmt = "eac3" if layout_str == SurroundLayout.SEVEN_POINT_ONE_FOUR else "ac3"
+                    b_rate = req.bitstream_bitrate or ("768k" if dolby_fmt == "eac3" else "640k")
+                    bitstream_out = settings.EXPORTS_DIR / f"{p.stem}_DOLBY_{req.profile}.{dolby_fmt}"
+                    bitstream_info = DolbyCodec.encode(
+                        multichannel, sr, bitstream_out,
+                        format_type=dolby_fmt,
+                        bitrate=b_rate,
+                        dialnorm_db=int(req.dialnorm_db)
+                    )
+                    bitstream_file = str(bitstream_out)
+                    bitstream_url = f"/api/v1/audio/download/{bitstream_out.name}"
+                else:
+                    b_rate = req.bitstream_bitrate or "1536k"
+                    bitstream_out = settings.EXPORTS_DIR / f"{p.stem}_DTS_{req.profile}.dts"
+                    bitstream_info = DTSCodec.encode(
+                        multichannel, sr, bitstream_out,
+                        bitrate=b_rate
+                    )
+                    bitstream_file = str(bitstream_out)
+                    bitstream_url = f"/api/v1/audio/download/{bitstream_out.name}"
+
             # Quick Acoustic QC Analysis
             qc = AudioAnalyzer.full_audio_analysis(multichannel, sr)
 
@@ -433,6 +476,9 @@ async def cinema_process(req: CinemaProcessRequest):
                 "profile": req.profile,
                 "file_path": str(actual_out),
                 "download_url": f"/api/v1/audio/download/{actual_out.name}",
+                "bitstream_file": bitstream_file,
+                "bitstream_download_url": bitstream_url,
+                "bitstream_info": bitstream_info,
                 "binaural_file": bin_p,
                 "binaural_download_url": bin_url,
                 "channels_count": multichannel.shape[0],
@@ -447,6 +493,122 @@ async def cinema_process(req: CinemaProcessRequest):
                     "loudness_range_lra": qc["loudness_range_lra"]
                 },
                 "disclaimer": f"Processed via Sovereign {proc_type.upper()} Studio Engine simulation conforming to SMPTE / ITU-R BS.775 multichannel standards."
+            }
+        finally:
+            ResourceGuard.clean_memory()
+
+
+@app.post("/api/v1/cinema/encode")
+async def cinema_encode(req: CinemaEncodeRequest):
+    """
+    Lightweight Cinema Bitstream Encoder for Dolby AC-3, Dolby Digital Plus E-AC-3, and DTS.
+    Direct C-level streaming encoder generating studio broadcast delivery bitstreams.
+    """
+    p = Path(req.file_path)
+    if not p.is_absolute():
+        p = settings.STORAGE_DIR / p
+    if not p.exists():
+        for sub in [settings.UPLOADS_DIR, settings.PROCESSED_DIR, settings.EXPORTS_DIR, settings.STEMS_DIR]:
+            candidate = sub / Path(req.file_path).name
+            if candidate.exists():
+                p = candidate
+                break
+    if not p.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {req.file_path}")
+
+    codec = req.codec.lower().strip()
+    if codec in ["ac3", "dolby_ac3", "dolby"]:
+        ext = "ac3"
+        bitrate = req.bitrate or "640k"
+        encoder_fn = lambda a, s, out: DolbyCodec.encode(
+            a, s, out, format_type="ac3", bitrate=bitrate, dialnorm_db=req.dialnorm_db
+        )
+    elif codec in ["eac3", "dolby_eac3", "e-ac3"]:
+        ext = "eac3"
+        bitrate = req.bitrate or "768k"
+        encoder_fn = lambda a, s, out: DolbyCodec.encode(
+            a, s, out, format_type="eac3", bitrate=bitrate, dialnorm_db=req.dialnorm_db
+        )
+    elif codec in ["dts", "dca"]:
+        ext = "dts"
+        bitrate = req.bitrate or "1536k"
+        encoder_fn = lambda a, s, out: DTSCodec.encode(a, s, out, bitrate=bitrate)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported cinema encoder codec: {req.codec}. Choose 'ac3', 'eac3', or 'dts'.")
+
+    async with ResourceGuard.dsp_semaphore:
+        try:
+            audio, sr = AudioIO.load_audio(p)
+            out_name = req.output_filename or f"{p.stem}_{codec.upper()}_{uuid.uuid4().hex[:6]}.{ext}"
+            out_path = settings.EXPORTS_DIR / out_name
+
+            res = encoder_fn(audio, sr, out_path)
+            res["download_url"] = f"/api/v1/audio/download/{out_path.name}"
+            return res
+        finally:
+            ResourceGuard.clean_memory()
+
+
+@app.post("/api/v1/cinema/decode")
+async def cinema_decode(req: CinemaDecodeRequest):
+    """
+    Lightweight Cinema Bitstream Decoder for Dolby AC-3, E-AC-3, and DTS.
+    Extracts pristine discrete multi-channel 64-bit float PCM audio into WAV / FLAC.
+    """
+    p = Path(req.file_path)
+    if not p.is_absolute():
+        p = settings.STORAGE_DIR / p
+    if not p.exists():
+        for sub in [settings.UPLOADS_DIR, settings.PROCESSED_DIR, settings.EXPORTS_DIR, settings.STEMS_DIR]:
+            candidate = sub / Path(req.file_path).name
+            if candidate.exists():
+                p = candidate
+                break
+    if not p.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {req.file_path}")
+
+    suffix = p.suffix.lower()
+    async with ResourceGuard.dsp_semaphore:
+        try:
+            if suffix in [".ac3", ".eac3"]:
+                audio, sr, meta = DolbyCodec.decode(p)
+                detected_codec = "Dolby " + ("E-AC-3" if suffix == ".eac3" else "AC-3")
+            elif suffix in [".dts", ".dca"]:
+                audio, sr, meta = DTSCodec.decode(p)
+                detected_codec = "DTS Coherent Acoustics (DCA)"
+            else:
+                # General decoder fallback
+                audio, sr = AudioIO.load_audio(p)
+                meta = AudioIO.probe_audio(p).to_dict()
+                detected_codec = meta.get("codec_name", "PCM")
+
+            out_ext = req.output_format.lower()
+            out_name = f"{p.stem}_DECODED_{sr}Hz_{req.bit_depth}bit.{out_ext}"
+            out_path = settings.EXPORTS_DIR / out_name
+
+            actual_out = AudioIO.write_audio(
+                audio, out_path,
+                sample_rate=sr,
+                bit_depth=req.bit_depth,
+                format_type=req.output_format
+            )
+
+            # Analyze decoded multichannel audio
+            qc = AudioAnalyzer.full_audio_analysis(audio, sr)
+
+            return {
+                "status": "DECODED",
+                "detected_codec": detected_codec,
+                "file_path": str(actual_out),
+                "download_url": f"/api/v1/audio/download/{actual_out.name}",
+                "file_size_bytes": actual_out.stat().st_size,
+                "channels_count": audio.shape[0],
+                "sample_rate_hz": sr,
+                "bit_depth": req.bit_depth,
+                "duration_seconds": round(audio.shape[1] / sr, 3),
+                "bitstream_metadata": meta,
+                "acoustic_qc": qc,
+                "waveform": AudioAnalyzer.generate_waveform_peaks(audio, num_points=120)
             }
         finally:
             ResourceGuard.clean_memory()

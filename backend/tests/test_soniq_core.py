@@ -9,7 +9,7 @@ from app.core.surround_engine import SurroundLayout, SurroundPannerEngine
 from app.core.synth_engine import SynthEngine
 from app.core.mastering_engine import MasteringEngine
 from app.core.export_engine import ExportEngine
-from app.core.cinema_processor import DolbyProcessor, DTSProcessor
+from app.core.cinema_processor import DolbyProcessor, DTSProcessor, DolbyCodec, DTSCodec
 from app.config import settings
 
 
@@ -184,3 +184,45 @@ def test_dts_processing_suite(synthetic_stereo_audio):
     assert clear.shape == dts714.shape
     assert stats["dialogue_boost_db"] == 4.0
     assert stats["center_channel_idx"] == 2
+
+
+def test_dolby_codec_encode_decode(synthetic_stereo_audio, tmp_path):
+    audio, sr = synthetic_stereo_audio
+    # Conforming and encoding to AC-3
+    ac3_path = tmp_path / "test_dolby.ac3"
+    enc_res = DolbyCodec.encode(audio, sr, ac3_path, format_type="ac3", bitrate="640k", dialnorm_db=-27)
+    
+    assert enc_res["status"] == "ENCODED"
+    assert ac3_path.exists()
+    assert ac3_path.stat().st_size > 0
+    assert enc_res["bitrate"] == "640k"
+
+    # Decoding AC-3
+    dec_audio, dec_sr, meta = DolbyCodec.decode(ac3_path)
+    assert dec_audio.ndim == 2
+    assert dec_sr == 48000
+    assert "ac3" in meta.get("codec_name", "").lower()
+
+    # E-AC-3 test
+    eac3_path = tmp_path / "test_dolby.eac3"
+    enc_eac3 = DolbyCodec.encode(audio, sr, eac3_path, format_type="eac3", bitrate="768k", dialnorm_db=-24)
+    assert enc_eac3["status"] == "ENCODED"
+    assert eac3_path.exists()
+
+
+def test_dts_codec_encode_decode(synthetic_stereo_audio, tmp_path):
+    audio, sr = synthetic_stereo_audio
+    # Encode to DTS
+    dts_path = tmp_path / "test_master.dts"
+    enc_res = DTSCodec.encode(audio, sr, dts_path, bitrate="1536k")
+    
+    assert enc_res["status"] == "ENCODED"
+    assert dts_path.exists()
+    assert dts_path.stat().st_size > 0
+    assert enc_res["bitrate"] == "1536k"
+
+    # Decode DTS
+    dec_audio, dec_sr, meta = DTSCodec.decode(dts_path)
+    assert dec_audio.ndim == 2
+    assert dec_sr == 48000
+    assert "dts" in meta.get("codec_name", "").lower() or "dca" in meta.get("codec_name", "").lower()

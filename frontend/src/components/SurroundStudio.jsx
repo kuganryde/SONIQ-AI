@@ -45,9 +45,15 @@ export default function SurroundStudio({
   const [drcProfile, setDrcProfile] = useState('film_standard');
   const [dialogueBoostDb, setDialogueBoostDb] = useState(4.0);
   const [cinemaCrossoverHz, setCinemaCrossoverHz] = useState(80);
+  const [encodeBitstream, setEncodeBitstream] = useState(true);
+  const [bitstreamBitrate, setBitstreamBitrate] = useState('640k');
   const [cinemaProcessing, setCinemaProcessing] = useState(false);
   const [cinemaResult, setCinemaResult] = useState(null);
   const [cinemaError, setCinemaError] = useState('');
+
+  // Standalone Bitstream Decoder State
+  const [decodeLoading, setDecodeLoading] = useState(false);
+  const [decodeResult, setDecodeResult] = useState(null);
 
   // Speaker coordinates in 2D fallback view
   const speakerLayouts2D = {
@@ -174,7 +180,9 @@ export default function SurroundStudio({
           drc_profile: drcProfile,
           dialogue_boost_db: dialogueBoostDb,
           crossover_hz: cinemaCrossoverHz,
-          generate_binaural: true
+          generate_binaural: true,
+          encode_bitstream: encodeBitstream,
+          bitstream_bitrate: bitstreamBitrate
         })
       });
       setCinemaResult(data);
@@ -183,6 +191,32 @@ export default function SurroundStudio({
       alert(`Cinema Processing error: ${e.message}`);
     } finally {
       setCinemaProcessing(false);
+    }
+  };
+
+  const handleDecodeCinema = async () => {
+    const fileToUse = activeFile?.file_path || (tracks[0] ? tracks[0].file_path : null);
+    if (!fileToUse) {
+      alert("Please select or import a cinema bitstream file (.ac3, .eac3, .dts) to decode.");
+      return;
+    }
+
+    setDecodeLoading(true);
+    try {
+      const data = await safeFetchJson(apiUrl('/api/v1/cinema/decode'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file_path: fileToUse,
+          output_format: 'WAV',
+          bit_depth: '24'
+        })
+      });
+      setDecodeResult(data);
+    } catch (e) {
+      alert(`Bitstream decoding error: ${e.message}`);
+    } finally {
+      setDecodeLoading(false);
     }
   };
 
@@ -803,6 +837,48 @@ export default function SurroundStudio({
                 </div>
               </div>
 
+              {/* Bitstream Delivery Encoding Option */}
+              <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-white font-bold flex items-center space-x-2">
+                    <Disc className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Encode Certified Bitstream</span>
+                  </label>
+                  <input
+                    type="checkbox"
+                    checked={encodeBitstream}
+                    onChange={(e) => setEncodeBitstream(e.target.checked)}
+                    className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0 cursor-pointer"
+                  />
+                </div>
+                {encodeBitstream && (
+                  <div className="pt-1">
+                    <label className="text-[10px] text-slate-400 block mb-1">
+                      Bitrate ({cinemaBrand === 'dolby' ? 'Dolby AC-3 / E-AC-3' : 'DTS DCA'})
+                    </label>
+                    <select
+                      value={bitstreamBitrate}
+                      onChange={(e) => setBitstreamBitrate(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded p-1 text-slate-200 text-xs"
+                    >
+                      {cinemaBrand === 'dolby' ? (
+                        <>
+                          <option value="640k">640 kbps (Dolby Digital 5.1 Max Studio Rate)</option>
+                          <option value="448k">448 kbps (DVD / Broadcast Standard)</option>
+                          <option value="768k">768 kbps (Dolby Digital Plus E-AC-3)</option>
+                          <option value="1024k">1024 kbps (E-AC-3 High Bitrate)</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="1536k">1536 kbps (DTS Full-Rate Studio Master)</option>
+                          <option value="768k">768 kbps (DTS Half-Rate Cinema/Broadcast)</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                )}
+              </div>
+
             </div>
 
             {/* Execute Button */}
@@ -864,6 +940,21 @@ export default function SurroundStudio({
                     <Download className="w-4 h-4" />
                     <span>Download {cinemaResult.channels_layout} Cinema Multichannel WAV</span>
                   </a>
+
+                  {cinemaResult.bitstream_download_url && (
+                    <a
+                      href={resolveAudioUrl(cinemaResult.bitstream_download_url)}
+                      download
+                      className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-black font-mono text-xs font-bold transition-all shadow-lg cursor-pointer ${
+                        cinemaBrand === 'dolby'
+                          ? 'bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 shadow-emerald-500/20'
+                          : 'bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 shadow-amber-500/20'
+                      }`}
+                    >
+                      <Disc className="w-4 h-4" />
+                      <span>Download {cinemaBrand === 'dolby' ? 'Dolby Bitstream (.ac3)' : 'DTS Bitstream (.dts)'} ({cinemaResult.bitstream_info?.bitrate})</span>
+                    </a>
+                  )}
                 </div>
               </div>
 
@@ -892,6 +983,72 @@ export default function SurroundStudio({
               </div>
             </div>
           )}
+
+          {/* Cinema Bitstream Decoder Suite */}
+          <div className="bg-[#0c101a] p-5 rounded-2xl border border-slate-800 space-y-4 font-mono text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
+                  <Disc className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">CINEMA BITSTREAM DECODER & TRANSCODER</h3>
+                  <p className="text-[11px] text-slate-400">Lightweight C AVcodec engine: decodes Dolby Digital (.ac3/.eac3) and DTS (.dts/.dca) into discrete 64-bit float multi-channel PCM</p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleDecodeCinema}
+                disabled={decodeLoading}
+                className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold flex items-center space-x-1.5 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
+              >
+                {decodeLoading ? (
+                  <>
+                    <Activity className="w-4 h-4 animate-spin" />
+                    <span>Decoding Bitstream...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" />
+                    <span>Decode Active Cinema Track</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {decodeResult && (
+              <div className="bg-black/50 p-4 rounded-xl border border-emerald-500/30 space-y-3 animate-in fade-in">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span className="text-white font-bold">Decoded {decodeResult.detected_codec} ({decodeResult.channels_count} Discrete Channels)</span>
+                  </div>
+                  <a
+                    href={resolveAudioUrl(decodeResult.download_url)}
+                    download
+                    className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-[11px]"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download Multi-Channel PCM WAV</span>
+                  </a>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                  <div className="bg-slate-900/60 p-2 rounded border border-slate-800">
+                    <span className="text-slate-400">Sample Rate:</span> <span className="text-cyan-300 font-bold">{decodeResult.sample_rate_hz} Hz</span>
+                  </div>
+                  <div className="bg-slate-900/60 p-2 rounded border border-slate-800">
+                    <span className="text-slate-400">Bit Depth:</span> <span className="text-emerald-300 font-bold">{decodeResult.bit_depth}-bit</span>
+                  </div>
+                  <div className="bg-slate-900/60 p-2 rounded border border-slate-800">
+                    <span className="text-slate-400">Duration:</span> <span className="text-purple-300 font-bold">{decodeResult.duration_seconds}s</span>
+                  </div>
+                  <div className="bg-slate-900/60 p-2 rounded border border-slate-800">
+                    <span className="text-slate-400">Integrated LUFS:</span> <span className="text-amber-300 font-bold">{decodeResult.acoustic_qc?.integrated_lufs} LUFS</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
         </div>
       )}

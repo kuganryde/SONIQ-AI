@@ -148,6 +148,21 @@ class AudioIO:
         if not path.exists():
             raise FileNotFoundError(f"File not found: {path}")
 
+        # Direct cinema bitstream decoders
+        suffix = path.suffix.lower()
+        if suffix in [".ac3", ".eac3"]:
+            from app.core.cinema_processor import DolbyCodec
+            data, sr, _ = DolbyCodec.decode(path, target_sr=target_sr)
+            if mono and data.shape[0] > 1:
+                data = np.mean(data, axis=0, keepdims=True)
+            return data, sr
+        elif suffix in [".dts", ".dca"]:
+            from app.core.cinema_processor import DTSCodec
+            data, sr, _ = DTSCodec.decode(path, target_sr=target_sr)
+            if mono and data.shape[0] > 1:
+                data = np.mean(data, axis=0, keepdims=True)
+            return data, sr
+
         try:
             # First attempt soundfile (fast, zero distortion)
             data, sr = sf.read(str(path), dtype="float64", always_2d=True)
@@ -226,8 +241,14 @@ class AudioIO:
         elif fmt == "AIFF":
             subtype = "PCM_16" if bit_depth == "16" else ("FLOAT" if "32" in bit_depth else "PCM_24")
             sf.write(str(out_p), data_to_write, sample_rate, subtype=subtype, format="AIFF")
-        elif fmt in ["MP3", "AAC", "OGG", "OPUS", "AC3", "EAC3", "DTS", "DCA"]:
-            # Write temp WAV and convert via ffmpeg with strict quality parameters
+        elif fmt in ["AC3", "EAC3"]:
+            from app.core.cinema_processor import DolbyCodec
+            bitrate = "768k" if fmt == "EAC3" else "640k"
+            DolbyCodec.encode(audio, sample_rate, out_p, format_type=fmt, bitrate=bitrate)
+        elif fmt in ["DTS", "DCA"]:
+            from app.core.cinema_processor import DTSCodec
+            DTSCodec.encode(audio, sample_rate, out_p, bitrate="1536k")
+        elif fmt in ["MP3", "AAC", "OGG", "OPUS"]:
             temp_wav = out_p.with_suffix(".tmp.wav")
             sf.write(str(temp_wav), data_to_write, sample_rate, subtype="PCM_24", format="WAV")
             try:
@@ -240,12 +261,6 @@ class AudioIO:
                     cmd.extend(["-c:a", "libvorbis", "-q:a", "8"])
                 elif fmt == "OPUS":
                     cmd.extend(["-c:a", "libopus", "-b:a", "256k"])
-                elif fmt == "AC3":
-                    cmd.extend(["-c:a", "ac3", "-b:a", "640k"])
-                elif fmt == "EAC3":
-                    cmd.extend(["-c:a", "eac3", "-b:a", "768k"])
-                elif fmt in ["DTS", "DCA"]:
-                    cmd.extend(["-c:a", "dca", "-b:a", "1536k", "-strict", "-2"])
                 cmd.append(str(out_p))
                 subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
             finally:
