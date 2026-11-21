@@ -38,7 +38,8 @@ def check_and_sync():
         try:
             age = time.time() - index_lock.stat().st_mtime
             if age > LOCK_TIMEOUT_SECONDS:
-                print(f"[{datetime.datetime.utcnow().isoformat()}] Removing stale .git/index.lock (age: {age:.1f}s)")
+                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                print(f"[{now_iso}] Removing stale .git/index.lock (age: {age:.1f}s)")
                 index_lock.unlink()
             else:
                 return
@@ -77,7 +78,7 @@ def check_and_sync():
     # 2. Check if we have unpushed commits against origin/main
     code, unpushed_count, _ = run_git(["rev-list", "--count", "origin/main..HEAD"])
     if code == 0 and unpushed_count and int(unpushed_count) > 0:
-        now_str = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        now_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         print(f"[{now_str}] 🚀 Pushing {unpushed_count} commit(s) to GitHub (origin/main)...", flush=True)
         push_code, push_out, push_err = run_git(["push", "origin", "main"])
         if push_code == 0:
@@ -92,7 +93,8 @@ def main():
         try:
             check_and_sync()
         except Exception as e:
-            print(f"[{datetime.datetime.utcnow().isoformat()}] Error during git sync: {e}", file=sys.stderr, flush=True)
+            now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            print(f"[{now_iso}] Error during git sync: {e}", file=sys.stderr, flush=True)
         time.sleep(CHECK_INTERVAL_SECONDS)
 
 
