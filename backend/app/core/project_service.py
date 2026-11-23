@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
