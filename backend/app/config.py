@@ -22,6 +22,10 @@ class Settings(BaseModel):
     EXPORTS_DIR: Path = STORAGE_DIR / "exports"
     SYNTHS_DIR: Path = STORAGE_DIR / "synths"
     BRAND_DIR: Path = STORAGE_DIR / "brand"
+    VIDEO_UPLOAD_DIR: Path = STORAGE_DIR / "video_uploads"
+    PROXIES_DIR: Path = STORAGE_DIR / "proxies"
+    THUMBNAILS_DIR: Path = STORAGE_DIR / "thumbnails"
+    VIDEO_EXPORTS_DIR: Path = STORAGE_DIR / "video_exports"
     
     # Database
     DATABASE_URL: str = f"sqlite:///{STORAGE_DIR}/soniq_ai.db"
@@ -35,6 +39,15 @@ class Settings(BaseModel):
     SUPPORTED_IMPORT_FORMATS: list[str] = [
         "wav", "bwf", "aiff", "aif", "flac", "mp3", "aac", "m4a", "ogg", "opus", "alac", "caf", "midi", "mid"
     ]
+    SUPPORTED_VIDEO_FORMATS: list[str] = [
+        "mp4", "mov", "mkv", "webm", "avi", "flv", "ts", "m4v", "prores"
+    ]
+    SUPPORTED_IMAGE_FORMATS: list[str] = [
+        "jpg", "jpeg", "png", "webp", "gif", "svg", "bmp"
+    ]
+    SUPPORTED_PROJECT_FORMATS: list[str] = [
+        "json", "edl", "otio", "fcpxml"
+    ]
     SUPPORTED_SAMPLE_RATES: list[int] = [44100, 48000, 88200, 96000, 176400, 192000]
     SUPPORTED_BIT_DEPTHS: list[str] = ["16", "24", "32f"]
     
@@ -44,5 +57,16 @@ class Settings(BaseModel):
 settings = Settings()
 
 # Ensure directories exist
-for p in [settings.UPLOAD_DIR, settings.PROCESSED_DIR, settings.STEMS_DIR, settings.EXPORTS_DIR, settings.SYNTHS_DIR, settings.BRAND_DIR]:
+for p in [
+    settings.UPLOAD_DIR,
+    settings.PROCESSED_DIR,
+    settings.STEMS_DIR,
+    settings.EXPORTS_DIR,
+    settings.SYNTHS_DIR,
+    settings.BRAND_DIR,
+    settings.VIDEO_UPLOAD_DIR,
+    settings.PROXIES_DIR,
+    settings.THUMBNAILS_DIR,
+    settings.VIDEO_EXPORTS_DIR,
+]:
     p.mkdir(parents=True, exist_ok=True)
