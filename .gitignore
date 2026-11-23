@@ -14,6 +14,16 @@ backend/storage/synths/*
 !backend/storage/synths/.gitkeep
 backend/storage/brand/*
 !backend/storage/brand/.gitkeep
+backend/storage/video_uploads/*
+!backend/storage/video_uploads/.gitkeep
+backend/storage/proxies/*
+!backend/storage/proxies/.gitkeep
+backend/storage/thumbnails/*
+!backend/storage/thumbnails/.gitkeep
+backend/storage/video_exports/*
+!backend/storage/video_exports/.gitkeep
+backend/storage/*.db
+backend/storage/*.sqlite3
 __pycache__/
 *.pyc
 .DS_Store
