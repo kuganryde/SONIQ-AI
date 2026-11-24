@@ -1439,7 +1439,7 @@ async def export_project_mlt(project_id: str):
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    assets = ProjectService.list_project_assets(project_id)
+    assets = ProjectService.list_assets(project_id=project_id)
     clips = []
     for a in assets:
         if a.get("media_type") == "video":
