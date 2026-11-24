@@ -299,34 +299,39 @@ class ProjectService:
         audio, and titles ready for immediate playback and editing.
         """
         conn = get_connection()
+        project_exists = False
         try:
             cur = conn.cursor()
             cur.execute("SELECT id FROM projects WHERE id = 'proj_vybe_demo'")
             row = cur.fetchone()
             if row:
-                return ProjectService.get_project("proj_vybe_demo")
+                project_exists = True
+                cur.execute("SELECT count(*) FROM media_assets WHERE project_id = 'proj_vybe_demo'")
+                if cur.fetchone()[0] > 0:
+                    return ProjectService.get_project("proj_vybe_demo")
         finally:
             conn.close()
 
-        # Create demo project
-        now = datetime.now(timezone.utc).isoformat()
-        conn = get_connection()
-        try:
-            with conn:
-                conn.execute(
-                    """
-                    INSERT INTO projects (
-                        id, name, tempo_bpm, time_signature, sample_rate_hz, bit_depth,
-                        aspect_ratio, frame_rate, width, height, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        "proj_vybe_demo", "VYBE Cinematic Showreel (Demo Project)", 124, "4/4",
-                        48000, "24", "16:9", 30.0, 1920, 1080, now, now
+        # Create demo project if it doesn't already exist
+        if not project_exists:
+            now = datetime.now(timezone.utc).isoformat()
+            conn = get_connection()
+            try:
+                with conn:
+                    conn.execute(
+                        """
+                        INSERT INTO projects (
+                            id, name, tempo_bpm, time_signature, sample_rate_hz, bit_depth,
+                            aspect_ratio, frame_rate, width, height, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            "proj_vybe_demo", "VYBE Cinematic Showreel (Demo Project)", 124, "4/4",
+                            48000, "24", "16:9", 30.0, 1920, 1080, now, now
+                        )
                     )
-                )
-        finally:
-            conn.close()
+            finally:
+                conn.close()
 
         # Generate 2 demo video clips using FFmpeg
         demo_clips = [
