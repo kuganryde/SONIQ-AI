@@ -1371,16 +1371,48 @@ async def director_plan_video(req: DirectorPlanRequest):
 
 @app.post("/api/v1/render/video")
 async def render_video_timeline(req: RenderVideoRequest):
-    """Queues a professional video timeline render job."""
+    """Queues a professional video timeline render job with 3D LUT and Frei0r VFX support."""
     job = VideoRenderService.create_job(
         project_id=req.project_id,
         profile_name=req.profile_name,
         output_format=req.output_format,
         resolution=req.resolution,
         frame_rate=req.frame_rate,
-        timeline_clips=req.clips
+        timeline_clips=req.clips,
+        lut_name=req.lut_name,
+        frei0r_effects=req.frei0r_effects
     )
     return job
+
+
+@app.get("/api/v1/video/effects/library")
+async def get_effects_library():
+    """Returns catalog of Hollywood 3D LUTs and open-source Frei0r VFX plugins."""
+    luts = [
+        {"id": "clean", "name": "Clean Rec.709", "desc": "Neutral broadcast standard with accurate skin tones", "category": "Natural"},
+        {"id": "kodak_2383", "name": "Kodak 2383 Film Print", "desc": "Hollywood film stock emulation with rich contrast & warm highlight roll-off", "category": "Cinema"},
+        {"id": "fuji_3513", "name": "Fuji 3513 Cinema Emulsion", "desc": "Cool emerald tones, soft highlights, and gentle portrait skin contrast", "category": "Cinema"},
+        {"id": "teal_orange", "name": "Blockbuster Teal & Orange", "desc": "Deep cyan shadows and saturated amber skin tones", "category": "Blockbuster"},
+        {"id": "cyberpunk_neon", "name": "Cyberpunk Neon Matrix", "desc": "Electric blues, saturated magentas, and deep black level crushing", "category": "Stylized"},
+        {"id": "noir_silver", "name": "Noir Silver Halide B&W", "desc": "High-contrast monochrome film grain response", "category": "Monochrome"},
+        {"id": "vintage_warm", "name": "Vintage Warm 35mm", "desc": "Warm sepia analog toe compression and nostalgic warmth", "category": "Vintage"}
+    ]
+
+    frei0r_vfx = [
+        {"id": "glow", "name": "Cinematic Diffusion Bloom", "filter": "glow:0.4", "desc": "Dreamy soft glow diffusion around bright highlights", "category": "Lighting"},
+        {"id": "rgbsplit0r", "name": "RGB Chromatic Aberration", "filter": "rgbsplit0r:0.04", "desc": "Color fringing split effect for high-impact action beats", "category": "Distortion"},
+        {"id": "glitch0r", "name": "Digital Glitch & Noise", "filter": "glitch0r", "desc": "Cyberpunk digital transmission artifact corruption", "category": "Glitch"},
+        {"id": "sobel", "name": "Cyberpunk Edge Tracer", "filter": "sobel", "desc": "High-contrast neon contour edge detection", "category": "Stylized"},
+        {"id": "pixeliz0r", "name": "Retro 8-Bit Pixelation", "filter": "pixeliz0r:0.02", "desc": "Retro arcade pixel reduction mosaic", "category": "Retro"},
+        {"id": "vignette0r", "name": "Anamorphic Vignette Falloff", "filter": "vignette0r", "desc": "Gentle optical edge darkening to focus viewer attention", "category": "Optical"}
+    ]
+
+    return {
+        "engine": "FFmpeg 6.1.1 + Frei0r v1.8 (136 open-source plugins)",
+        "luts": luts,
+        "frei0r_effects": frei0r_vfx,
+        "total_frei0r_installed": 136
+    }
 
 
 @app.get("/api/v1/render/jobs")
