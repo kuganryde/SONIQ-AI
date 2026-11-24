@@ -260,132 +260,150 @@ export default function App() {
     }
   };
 
+  const handleTransferVideoAudioToSoniq = async () => {
+    setWorkspaceMode('soniq');
+    setActiveTab('studio');
+    if (tracks.length === 0) {
+      await handleLoadDemo();
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-[#07090e] text-slate-100">
-      {/* Top Navbar */}
+      {/* Top Navbar with Sovereign Studio Switcher */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isPlaying={isPlaying}
+        workspaceMode={workspaceMode}
+        setWorkspaceMode={setWorkspaceMode}
       />
 
-      {/* Main View Area */}
+      {/* Main Studio View Area */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        {activeTab === 'studio' && (
+        {workspaceMode === 'vybe' ? (
+          <VybeVideoStudio onTransferAudioToSoniq={handleTransferVideoAudioToSoniq} />
+        ) : (
           <>
-            {showQuickBanner && tracks.length > 0 && (
-              <QuickFXBanner
-                track={tracks.find(t => t.id === activeTrackId) || tracks[0]}
-                onOpenQuickFX={() => {
-                  const sel = tracks.find(t => t.id === activeTrackId) || tracks[0];
-                  if (sel) {
-                    setQuickFXTrack(sel);
+            {activeTab === 'studio' && (
+              <>
+                {showQuickBanner && tracks.length > 0 && (
+                  <QuickFXBanner
+                    track={tracks.find(t => t.id === activeTrackId) || tracks[0]}
+                    onOpenQuickFX={() => {
+                      const sel = tracks.find(t => t.id === activeTrackId) || tracks[0];
+                      if (sel) {
+                        setQuickFXTrack(sel);
+                        setIsQuickFXOpen(true);
+                      }
+                    }}
+                    onApplyEffect={handleApplyEffect}
+                    onAddStemTracks={handleAddStemTracks}
+                    onDismiss={() => setShowQuickBanner(false)}
+                  />
+                )}
+                <DAWTimeline
+                  tracks={tracks}
+                  onUpdateTrack={handleUpdateTrack}
+                  onAddTrack={handleAddTrack}
+                  onUploadFile={handleUploadFile}
+                  onInsertSoundLogo={handleInsertSoundLogo}
+                  onClearSession={handleClearSession}
+                  onLoadDemo={handleLoadDemo}
+                  loadingDemo={loadingDemo}
+                  onNavigateTab={(tab) => setActiveTab(tab)}
+                  activeTrackId={activeTrackId}
+                  setActiveTrackId={(id) => {
+                    setActiveTrackId(id);
+                    const found = tracks.find(t => t.id === id);
+                    if (found) setActiveFile({ file_path: found.file_path });
+                  }}
+                  onOpenQuickFX={(trackToFX) => {
+                    setQuickFXTrack(trackToFX);
                     setIsQuickFXOpen(true);
-                  }
-                }}
-                onApplyEffect={handleApplyEffect}
-                onAddStemTracks={handleAddStemTracks}
-                onDismiss={() => setShowQuickBanner(false)}
+                  }}
+                />
+              </>
+            )}
+
+            {activeTab === 'mixer' && (
+              <MixerConsole
+                tracks={tracks}
+                onUpdateTrack={handleUpdateTrack}
               />
             )}
-            <DAWTimeline
-              tracks={tracks}
-              onUpdateTrack={handleUpdateTrack}
-              onAddTrack={handleAddTrack}
-              onUploadFile={handleUploadFile}
-              onInsertSoundLogo={handleInsertSoundLogo}
-              onClearSession={handleClearSession}
-              onLoadDemo={handleLoadDemo}
-              loadingDemo={loadingDemo}
-              onNavigateTab={(tab) => setActiveTab(tab)}
-              activeTrackId={activeTrackId}
-              setActiveTrackId={(id) => {
-                setActiveTrackId(id);
-                const found = tracks.find(t => t.id === id);
-                if (found) setActiveFile({ file_path: found.file_path });
-              }}
-              onOpenQuickFX={(trackToFX) => {
-                setQuickFXTrack(trackToFX);
-                setIsQuickFXOpen(true);
-              }}
-            />
+
+            {activeTab === 'ai_agents' && (
+              <AIAgentsConsole
+                activeFile={activeFile}
+                tracks={tracks}
+                onRefreshTracks={handleLoadDemo}
+              />
+            )}
+
+            {activeTab === 'dsp_rack' && (
+              <DSPRack
+                activeFile={activeFile}
+                tracks={tracks}
+              />
+            )}
+
+            {activeTab === 'surround' && (
+              <SurroundStudio
+                activeFile={activeFile}
+                tracks={tracks}
+              />
+            )}
+
+            {activeTab === 'synths' && (
+              <SynthesizerStudio
+                onAddTrackFromAudio={handleAddTrackFromAudio}
+              />
+            )}
+
+            {activeTab === 'mastering' && (
+              <MasteringSuite
+                activeFile={activeFile}
+                tracks={tracks}
+              />
+            )}
+
+            {activeTab === 'analysis' && (
+              <AudioAnalyzer
+                activeFile={activeFile}
+                tracks={tracks}
+              />
+            )}
+
+            {activeTab === 'recording' && (
+              <RecordingStudio
+                onAddTrackFromAudio={handleAddTrackFromAudio}
+              />
+            )}
+
+            {activeTab === 'exports' && (
+              <ExportCenter
+                activeFile={activeFile}
+                tracks={tracks}
+              />
+            )}
           </>
-        )}
-
-        {activeTab === 'mixer' && (
-          <MixerConsole
-            tracks={tracks}
-            onUpdateTrack={handleUpdateTrack}
-          />
-        )}
-
-        {activeTab === 'ai_agents' && (
-          <AIAgentsConsole
-            activeFile={activeFile}
-            tracks={tracks}
-            onRefreshTracks={handleLoadDemo}
-          />
-        )}
-
-        {activeTab === 'dsp_rack' && (
-          <DSPRack
-            activeFile={activeFile}
-            tracks={tracks}
-          />
-        )}
-
-        {activeTab === 'surround' && (
-          <SurroundStudio
-            activeFile={activeFile}
-            tracks={tracks}
-          />
-        )}
-
-        {activeTab === 'synths' && (
-          <SynthesizerStudio
-            onAddTrackFromAudio={handleAddTrackFromAudio}
-          />
-        )}
-
-        {activeTab === 'mastering' && (
-          <MasteringSuite
-            activeFile={activeFile}
-            tracks={tracks}
-          />
-        )}
-
-        {activeTab === 'analysis' && (
-          <AudioAnalyzer
-            activeFile={activeFile}
-            tracks={tracks}
-          />
-        )}
-
-        {activeTab === 'recording' && (
-          <RecordingStudio
-            onAddTrackFromAudio={handleAddTrackFromAudio}
-          />
-        )}
-
-        {activeTab === 'exports' && (
-          <ExportCenter
-            activeFile={activeFile}
-            tracks={tracks}
-          />
         )}
       </main>
 
-      {/* Bottom Transport Bar */}
-      <TransportBar
-        isPlaying={isPlaying}
-        onPlay={handlePlay}
-        onPause={handlePause}
-        onStop={handleStop}
-        bpm={bpm}
-        setBpm={setBpm}
-        onLoadDemo={handleLoadDemo}
-        loadingDemo={loadingDemo}
-      />
+      {/* Bottom Transport Bar (SONIQ DAW Audio Mode) */}
+      {workspaceMode === 'soniq' && (
+        <TransportBar
+          isPlaying={isPlaying}
+          onPlay={handlePlay}
+          onPause={handlePause}
+          onStop={handleStop}
+          bpm={bpm}
+          setBpm={setBpm}
+          onLoadDemo={handleLoadDemo}
+          loadingDemo={loadingDemo}
+        />
+      )}
 
       {/* Instant Effects & Mastering Assistant Modal */}
       <QuickFXModal
