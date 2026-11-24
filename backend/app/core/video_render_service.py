@@ -222,12 +222,6 @@ class VideoRenderService:
                     "-b:a", "192k",
                     str(out_file)
                 ]
-                    "-preset", "veryfast",
-                    "-pix_fmt", "yuv420p",
-                    "-c:a", "aac",
-                    "-b:a", "192k",
-                    str(out_file)
-                ]
 
             VideoRenderService._update_job_status(job_id, "RENDERING", 60.0)
             
