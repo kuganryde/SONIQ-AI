@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -17,12 +17,16 @@ from pydantic import BaseModel, Field
 from app.config import settings
 from app.core.analysis import AudioAnalyzer
 from app.core.audio_io import AudioIO
+from app.core.db import init_db
 from app.core.dsp_engine import DSPOps
 from app.core.export_engine import ExportEngine
 from app.core.mastering_engine import MASTERING_PROFILES, MasteringEngine
+from app.core.project_service import ProjectService
+from app.core.streaming import send_file_range
 from app.core.surround_engine import SurroundLayout, SurroundPannerEngine
 from app.core.cinema_processor import DolbyProcessor, DTSProcessor, DolbyCodec, DTSCodec
 from app.core.synth_engine import SynthEngine
+from app.core.video_render_service import VideoRenderService
 from app.agents.production_manager import ProductionManagerAgent
 from app.agents.audio_analyst import AudioAnalystAgent
 from app.agents.stem_separator import StemSeparatorAgent
@@ -33,6 +37,7 @@ from app.agents.vocal_engineer import VocalEngineerAgent
 from app.agents.mastering_engineer import MasteringEngineerAgent
 from app.agents.surround_engineer import SurroundEngineerAgent
 from app.agents.quality_control import QualityControlAgent
+from app.agents.ai_director import AIDirectorAgent
 from app.core.resource_guard import (
     AudioCacheManager,
     RateLimitMiddleware,
