@@ -1111,3 +1111,309 @@ async def websocket_monitoring(websocket: WebSocket):
             await asyncio.sleep(0.08) # ~12 fps meter updates
     except WebSocketDisconnect:
         pass
+
+
+# ==============================================================================
+# RYDETECH VYBE AI — AUTONOMOUS MULTIMEDIA STUDIO & VIDEO EDITING ENDPOINTS
+# ==============================================================================
+
+class ProjectCreateRequest(BaseModel):
+    name: str = "Untitled Project"
+    aspect_ratio: str = "16:9"
+    frame_rate: float = 30.0
+    width: int = 1920
+    height: int = 1080
+    sample_rate_hz: int = 48000
+    tempo_bpm: int = 120
+    time_signature: str = "4/4"
+    bit_depth: str = "24"
+
+
+class ProjectUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    aspect_ratio: Optional[str] = None
+    frame_rate: Optional[float] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    tempo_bpm: Optional[int] = None
+    time_signature: Optional[str] = None
+
+
+class DirectorPlanRequest(BaseModel):
+    prompt: str = Field(..., min_length=2)
+    aspect_ratio: str = "16:9"
+    target_duration_sec: float = 30.0
+    style_preset: str = "cinematic"
+
+
+class RenderVideoRequest(BaseModel):
+    project_id: str
+    profile_name: str = "Web 1080p H.264"
+    output_format: str = "mp4"
+    resolution: str = "1080p"
+    frame_rate: float = 30.0
+    clips: List[Dict[str, Any]] = []
+
+
+@app.get("/api/v1/projects")
+async def list_projects():
+    """Lists all active VYBE AI video and multimedia production projects."""
+    projects = ProjectService.list_projects()
+    return {"projects": projects, "total": len(projects)}
+
+
+@app.post("/api/v1/projects")
+async def create_project(req: ProjectCreateRequest):
+    """Creates a new sovereign multimedia project in VYBE AI."""
+    proj = ProjectService.create_project(
+        name=req.name,
+        aspect_ratio=req.aspect_ratio,
+        frame_rate=req.frame_rate,
+        width=req.width,
+        height=req.height,
+        sample_rate_hz=req.sample_rate_hz,
+        tempo_bpm=req.tempo_bpm,
+        time_signature=req.time_signature,
+        bit_depth=req.bit_depth
+    )
+    return proj
+
+
+@app.get("/api/v1/projects/demo/vybe")
+async def get_vybe_demo_project():
+    """Retrieves or synthesizes the pre-populated VYBE AI 1080p demonstration showreel."""
+    demo = ProjectService.ensure_demo_media_project()
+    return demo
+
+
+@app.get("/api/v1/projects/{project_id}")
+async def get_project(project_id: str):
+    """Retrieves full project details including associated assets and timeline metadata."""
+    proj = ProjectService.get_project(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return proj
+
+
+@app.patch("/api/v1/projects/{project_id}")
+async def update_project(project_id: str, req: ProjectUpdateRequest):
+    """Updates project properties such as aspect ratio, frame rate, and dimensions."""
+    updates = req.model_dump(exclude_unset=True)
+    proj = ProjectService.update_project(project_id, updates)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return proj
+
+
+@app.delete("/api/v1/projects/{project_id}")
+async def delete_project(project_id: str):
+    """Deletes a project and removes associations."""
+    success = ProjectService.delete_project(project_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found or already deleted")
+    return {"status": "deleted", "project_id": project_id}
+
+
+# --- Non-Destructive Media Ingestion & Asset Streaming ---
+
+@app.post("/api/v1/media/upload")
+async def upload_media_asset(
+    file: UploadFile = File(...),
+    project_id: Optional[str] = Form(None)
+):
+    """
+    Non-destructively imports a media asset (Video, Audio, Image).
+    Performs deep FFprobe inspection, generates 540p proxy, thumbnails, filmstrip,
+    and extracts lossless audio for immediate SONIQ DAW processing.
+    """
+    temp_dir = Path(settings.STORAGE_DIR) / "temp_imports"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_dest = temp_dir / f"temp_{uuid.uuid4().hex[:8]}_{file.filename}"
+
+    try:
+        with open(temp_dest, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+
+        asset = ProjectService.ingest_asset_file(
+            source_file_path=temp_dest,
+            original_filename=file.filename or "media_asset",
+            project_id=project_id
+        )
+        return asset
+    finally:
+        if temp_dest.exists():
+            temp_dest.unlink()
+
+
+@app.get("/api/v1/media/assets")
+async def list_media_assets(
+    project_id: Optional[str] = None,
+    media_type: Optional[str] = None
+):
+    """Lists media assets in the sovereign library."""
+    assets = ProjectService.list_assets(project_id=project_id, media_type=media_type)
+    return {"assets": assets, "total": len(assets)}
+
+
+@app.get("/api/v1/media/assets/{asset_id}")
+async def get_media_asset(asset_id: str):
+    """Gets details and inspection telemetry of a specific media asset."""
+    asset = ProjectService.get_asset(asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Media asset not found")
+    return asset
+
+
+@app.delete("/api/v1/media/assets/{asset_id}")
+async def delete_media_asset(asset_id: str):
+    """Removes media asset record."""
+    success = ProjectService.delete_asset(asset_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Media asset not found")
+    return {"status": "deleted", "asset_id": asset_id}
+
+
+@app.get("/api/v1/media/stream/{asset_id}")
+async def stream_media_asset(asset_id: str, request: Request):
+    """RFC 7233 byte-range streaming for seamless video timeline scrubbing."""
+    asset = ProjectService.get_asset(asset_id)
+    if not asset or not asset.get("file_path"):
+        raise HTTPException(status_code=404, detail="Media asset not found")
+    
+    file_path = Path(asset["file_path"])
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Asset file missing on storage")
+    
+    ext = file_path.suffix.lower().replace(".", "")
+    content_type = "video/mp4" if ext in ["mp4", "m4v"] else "application/octet-stream"
+    return await send_file_range(file_path, request, content_type=content_type)
+
+
+@app.get("/api/v1/media/proxy-stream/{asset_id}")
+async def stream_media_proxy(asset_id: str, request: Request):
+    """Streams fast lightweight 540p proxy for low-latency editing preview."""
+    asset = ProjectService.get_asset(asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Media asset not found")
+    
+    proxy_path = asset.get("proxy_path")
+    if not proxy_path or not Path(proxy_path).exists():
+        # Fallback to source stream if proxy absent
+        return await stream_media_asset(asset_id, request)
+
+    return await send_file_range(Path(proxy_path), request, content_type="video/mp4")
+
+
+@app.get("/api/v1/media/thumbnail/{asset_id}")
+async def get_media_thumbnail(asset_id: str):
+    """Returns poster thumbnail image."""
+    asset = ProjectService.get_asset(asset_id)
+    if not asset or not asset.get("thumbnail_path"):
+        raise HTTPException(status_code=404, detail="Thumbnail not available")
+    
+    p = Path(asset["thumbnail_path"])
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="Thumbnail file not found")
+    return FileResponse(p, media_type="image/jpeg")
+
+
+@app.get("/api/v1/media/filmstrip/{asset_id}/{index}")
+async def get_filmstrip_frame(asset_id: str, index: int):
+    """Returns a specific filmstrip frame for timeline scrub strips."""
+    asset = ProjectService.get_asset(asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    strips = asset.get("filmstrip_paths", [])
+    if index < 0 or index >= len(strips):
+        raise HTTPException(status_code=404, detail="Filmstrip frame index out of range")
+    
+    p = Path(strips[index])
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="Filmstrip frame file missing")
+    return FileResponse(p, media_type="image/jpeg")
+
+
+@app.get("/api/v1/media/download/{asset_id}")
+async def download_media_asset(asset_id: str):
+    """Downloads bit-exact media file."""
+    asset = ProjectService.get_asset(asset_id)
+    if not asset or not asset.get("file_path"):
+        raise HTTPException(status_code=404, detail="Media asset not found")
+    
+    p = Path(asset["file_path"])
+    return FileResponse(p, filename=asset["file_name"])
+
+
+# --- Agent 11: AI Director & Storyboard Generator ---
+
+@app.post("/api/v1/director/plan")
+async def director_plan_video(req: DirectorPlanRequest):
+    """
+    Agent 11: AI Director & Storyboard Generator.
+    Translates natural language creative prompts into scene breakdowns, camera moves,
+    EDL cut cues, and soundtrack synchronization guides.
+    """
+    director = AIDirectorAgent()
+    plan = await director.plan_video(
+        user_prompt=req.prompt,
+        target_aspect_ratio=req.aspect_ratio,
+        target_duration_sec=req.target_duration_sec,
+        style_preset=req.style_preset
+    )
+    return plan
+
+
+# --- Video Render & Export Pipeline ---
+
+@app.post("/api/v1/render/video")
+async def render_video_timeline(req: RenderVideoRequest):
+    """Queues a professional video timeline render job."""
+    job = VideoRenderService.create_job(
+        project_id=req.project_id,
+        profile_name=req.profile_name,
+        output_format=req.output_format,
+        resolution=req.resolution,
+        frame_rate=req.frame_rate,
+        timeline_clips=req.clips
+    )
+    return job
+
+
+@app.get("/api/v1/render/jobs")
+async def list_render_jobs(project_id: Optional[str] = None):
+    """Lists recent video render jobs."""
+    jobs = VideoRenderService.list_jobs(project_id=project_id)
+    return {"jobs": jobs, "total": len(jobs)}
+
+
+@app.get("/api/v1/render/jobs/{job_id}")
+async def get_render_job(job_id: str):
+    """Retrieves the status and progress of an active render job."""
+    job = VideoRenderService.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Render job not found")
+    return job
+
+
+@app.get("/api/v1/render/stream/{job_id}")
+async def stream_rendered_video(job_id: str, request: Request):
+    """Streams rendered master video with byte-range support."""
+    job = VideoRenderService.get_job(job_id)
+    if not job or not job.get("output_file_path"):
+        raise HTTPException(status_code=404, detail="Rendered video not found or still rendering")
+    
+    p = Path(job["output_file_path"])
+    return await send_file_range(p, request, content_type="video/mp4")
+
+
+@app.get("/api/v1/render/download/{job_id}")
+async def download_rendered_video(job_id: str):
+    """Downloads rendered master video file."""
+    job = VideoRenderService.get_job(job_id)
+    if not job or not job.get("output_file_path"):
+        raise HTTPException(status_code=404, detail="Rendered video not found or not completed")
+    
+    p = Path(job["output_file_path"])
+    filename = p.name
+    return FileResponse(p, filename=filename, media_type="video/mp4")
