@@ -104,10 +104,10 @@ export default function Navbar({
                 </span>
                 <span className="text-slate-600 font-mono text-xs">/</span>
                 <span className="font-black tracking-wider text-base text-white font-mono">
-                  SONIQ AI
+                  {workspaceMode === 'vybe' ? 'VYBE AI' : 'SONIQ AI'}
                 </span>
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950/90 text-cyan-400 border border-cyan-800/80">
-                  PRO v1.0
+                  {workspaceMode === 'vybe' ? 'STUDIO v1.0' : 'PRO v1.0'}
                 </span>
                 
                 {/* 1-Click Interactive Sound Logo Button */}
@@ -122,19 +122,14 @@ export default function Navbar({
                 >
                   <span className={`inline-block w-1.5 h-1.5 rounded-full ${isSoundLogoPlaying ? 'bg-black animate-ping' : 'bg-cyan-400'}`} />
                   <span>{isSoundLogoPlaying ? 'Playing Sonic Ident...' : 'Play Sound Logo'}</span>
-                  {isSoundLogoPlaying && (
-                    <span className="flex space-x-0.5 items-end h-2.5">
-                      <span className="w-0.5 bg-black h-full animate-[pulse_0.4s_infinite]" />
-                      <span className="w-0.5 bg-black h-2/3 animate-[pulse_0.6s_infinite]" />
-                      <span className="w-0.5 bg-black h-4/5 animate-[pulse_0.5s_infinite]" />
-                    </span>
-                  )}
                 </button>
               </div>
               
               <div className="flex items-center space-x-2 mt-0.5">
                 <p className="text-[10px] text-slate-400 font-mono tracking-tight">
-                  Autonomous Studio DAW & Spatial Audio Architecture
+                  {workspaceMode === 'vybe' 
+                    ? 'Autonomous Multimedia Studio & Multitrack Video Suite' 
+                    : 'Autonomous Studio DAW & Spatial Audio Architecture'}
                 </p>
                 <button
                   onClick={() => setShowBrandModal(true)}
@@ -147,32 +142,61 @@ export default function Navbar({
             </div>
           </div>
 
-          {/* Tab Switcher */}
-          <nav className="flex items-center space-x-1 overflow-x-auto py-1">
-            {navItems.map(item => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
-                    isActive
-                      ? 'bg-gradient-to-r from-cyan-500/20 to-violet-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/10'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
-                  }`}
-                >
-                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-cyan-400' : 'text-slate-500'}`} />
-                  <span>{item.label}</span>
-                  {item.badge && (
-                    <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-violet-950 text-violet-300 border border-violet-800">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+          {/* Sovereign Studio Workspace Mode Switcher */}
+          <div className="flex items-center space-x-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 shadow-inner">
+            <button
+              onClick={() => setWorkspaceMode && setWorkspaceMode('vybe')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                workspaceMode === 'vybe'
+                  ? 'bg-gradient-to-r from-cyan-400 to-sky-500 text-black shadow-md shadow-cyan-500/30 scale-105'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Film className="w-3.5 h-3.5" />
+              <span>VYBE VIDEO STUDIO</span>
+              <span className="px-1 py-0.2 rounded bg-black/40 text-[9px] font-mono">ACTIVE</span>
+            </button>
+            <button
+              onClick={() => setWorkspaceMode && setWorkspaceMode('soniq')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                workspaceMode === 'soniq'
+                  ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/30 scale-105'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>SONIQ AUDIO DAW</span>
+            </button>
+          </div>
+
+          {/* Tab Switcher (Visible in SONIQ DAW mode) */}
+          {workspaceMode === 'soniq' && (
+            <nav className="flex items-center space-x-1 overflow-x-auto py-1">
+              {navItems.map(item => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
+                      isActive
+                        ? 'bg-gradient-to-r from-cyan-500/20 to-violet-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/10'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
+                    }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-cyan-400' : 'text-slate-500'}`} />
+                    <span>{item.label}</span>
+                    {item.badge && (
+                      <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-violet-950 text-violet-300 border border-violet-800">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          )}
 
           {/* Sovereign Enclave Badges */}
           <div className="hidden lg:flex items-center space-x-2.5 text-[11px] font-mono">
