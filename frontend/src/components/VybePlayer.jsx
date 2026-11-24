@@ -136,6 +136,11 @@ export default function VybePlayer({
               LUT: {colorGrade}
             </span>
           )}
+          {activeFrei0rEffects.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-700/60 text-[10px] text-cyan-300 uppercase">
+              Frei0r VFX ({activeFrei0rEffects.length})
+            </span>
+          )}
         </div>
 
         <div className="flex items-center space-x-2 font-mono">
