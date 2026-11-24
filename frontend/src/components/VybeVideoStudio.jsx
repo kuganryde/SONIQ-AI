@@ -21,6 +21,8 @@ import VybeAIDirector from './VybeAIDirector';
 import VybeMotionStudio from './VybeMotionStudio';
 import VybeSocialStudio from './VybeSocialStudio';
 import VybeRenderQueue from './VybeRenderQueue';
+import VybeUpliftBanner from './VybeUpliftBanner';
+import VybeHITLModal from './VybeHITLModal';
 import { apiUrl, safeFetchJson, resolveAudioUrl } from '../config/api';
 
 export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
@@ -39,6 +41,9 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
   const [overlayClips, setOverlayClips] = useState([]);
   const [isLoadingDemo, setIsLoadingDemo] = useState(false);
   const [projectName, setProjectName] = useState('VYBE Cinematic Showreel');
+  const [isHITLOpen, setIsHITLOpen] = useState(false);
+  const [selectedAssetForUplift, setSelectedAssetForUplift] = useState(null);
+  const [showUpliftBanner, setShowUpliftBanner] = useState(true);
 
   // Load initial demo project and assets
   const loadDemoShowreel = async () => {
