@@ -108,14 +108,21 @@ export default function VybeHITLModal({
 
   const getColorFilter = () => {
     switch (selectedLut) {
+      case 'kodak_2383':
+        return 'contrast(1.22) saturate(1.25) sepia(0.08) hue-rotate(-8deg)';
+      case 'fuji_3513':
+        return 'contrast(1.15) saturate(1.18) hue-rotate(6deg) brightness(0.98)';
       case 'teal_orange':
-        return 'contrast(1.2) saturate(1.3) hue-rotate(-12deg)';
+        return 'contrast(1.28) saturate(1.35) hue-rotate(-14deg)';
+      case 'cyberpunk_neon':
       case 'cyberpunk':
-        return 'contrast(1.3) saturate(1.6) hue-rotate(25deg)';
+        return 'contrast(1.35) saturate(1.7) hue-rotate(25deg)';
+      case 'noir_silver':
       case 'moody':
-        return 'contrast(1.35) brightness(0.85) saturate(0.7)';
+        return 'grayscale(1) contrast(1.4) brightness(0.92)';
+      case 'vintage_warm':
       case 'vintage':
-        return 'sepia(0.4) contrast(1.1) brightness(0.95)';
+        return 'sepia(0.45) contrast(1.12) brightness(0.96) saturate(1.1)';
       default:
         return 'none';
     }
