@@ -39,7 +39,7 @@ export default function VybeMotionStudio({
     { id: 'glitch0r', name: 'Digital Glitch & Noise', desc: 'Cyberpunk signal corruption and digital scanline artifacts.', icon: '👾' },
     { id: 'sobel', name: 'Cyberpunk Neon Edge Tracer', desc: 'Mathematical contour detection transforming footage into glowing wireframe edges.', icon: '🔮' },
     { id: 'pixeliz0r:0.02', name: 'Retro 8-Bit Pixelation', desc: 'Retro gaming resolution mosaic reduction.', icon: '🕹️' },
-    { id: 'vignette0r', name: 'Anamorphic Vignette Falloff', desc: 'Gentle optical edge darkening focusing viewer attention on the subject.', icon: '🎬' }
+    { id: 'vignette', name: 'Anamorphic Vignette Falloff', desc: 'Gentle optical edge darkening focusing viewer attention on the subject.', icon: '🎬' }
   ];
 
   const titlePresets = [
