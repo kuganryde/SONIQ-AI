@@ -171,7 +171,15 @@ class VideoRenderService:
 
         if frei0r_effects:
             for fx in frei0r_effects:
-                vf_filters.append(f"frei0r=filter_name={fx}")
+                parts = fx.split(":", 1)
+                plugin_name = parts[0].strip()
+                if plugin_name == "vignette0r":
+                    plugin_name = "vignette"
+                if len(parts) > 1:
+                    param_val = parts[1].strip()
+                    vf_filters.append(f"frei0r=filter_name={plugin_name}:filter_params={param_val}")
+                else:
+                    vf_filters.append(f"frei0r=filter_name={plugin_name}")
 
         vf_filters.append("format=yuv420p")
         vf_chain = ",".join(vf_filters)
@@ -233,7 +241,7 @@ class VideoRenderService:
             stdout, stderr = await proc.communicate()
 
             if proc.returncode != 0:
-                err_text = stderr.decode(errors="ignore")[:300]
+                err_text = stderr.decode(errors="ignore")[-800:]
                 logger.error(f"Render job {job_id} failed: {err_text}")
                 VideoRenderService._update_job_status(job_id, "FAILED", 0.0, error_msg=err_text)
                 return
