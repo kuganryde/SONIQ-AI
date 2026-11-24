@@ -15,7 +15,9 @@ import { apiUrl, safeFetchJson } from '../config/api';
 export default function VybeRenderQueue({
   currentResolution = '1080p',
   currentAspectRatio = '16:9',
-  timelineClips = []
+  timelineClips = [],
+  selectedLut = 'clean',
+  activeFrei0rEffects = []
 }) {
   const [resolution, setResolution] = useState(currentResolution);
   const [profile, setProfile] = useState('Web 1080p H.264');
@@ -51,7 +53,9 @@ export default function VybeRenderQueue({
         output_format: outputFormat,
         resolution: resolution,
         frame_rate: frameRate,
-        clips: timelineClips
+        clips: timelineClips,
+        lut_name: selectedLut || 'clean',
+        frei0r_effects: activeFrei0rEffects || []
       };
 
       const res = await safeFetchJson(apiUrl('/api/v1/render/video'), {
