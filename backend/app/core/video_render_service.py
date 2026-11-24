@@ -165,61 +165,133 @@ class VideoRenderService:
         output_format: str,
         timeline_clips: List[Dict[str, Any]],
         lut_name: Optional[str] = None,
-        frei0r_effects: Optional[List[str]] = None
+        frei0r_effects: Optional[List[str]] = None,
+        transition_style: Optional[str] = "dissolve",
+        transition_duration: float = 0.75,
+        engine: str = "auto",
+        pip_mode: Optional[str] = None,
+        pip_scale: float = 0.28
     ):
-        """Asynchronous worker that builds and runs the FFmpeg rendering pipeline."""
-        logger.info(f"Starting render job {job_id} ({resolution} @ {frame_rate}fps, LUT={lut_name}, VFX={frei0r_effects})...")
+        """Asynchronous worker that builds and runs the MLT / FFmpeg rendering pipeline."""
+        logger.info(
+            f"Starting render job {job_id} ({resolution} @ {frame_rate}fps, "
+            f"LUT={lut_name}, VFX={frei0r_effects}, Transition={transition_style}, Engine={engine})..."
+        )
         VideoRenderService._update_job_status(job_id, "RENDERING", 10.0)
 
         out_name = f"vybe_export_{job_id}.{output_format}"
         out_file = settings.VIDEO_EXPORTS_DIR / out_name
         w, h = VideoRenderService.RESOLUTIONS.get(resolution, (1920, 1080))
 
-        # Build professional FFmpeg filterchain: Scale + Pad + 3D LUT (.cube) + Frei0r VFX
-        vf_filters = [
-            f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2"
-        ]
-
-        if lut_name and lut_name != "clean":
-            lut_file = settings.LUTS_DIR / f"{lut_name}.cube"
-            if lut_file.exists():
-                vf_filters.append(f"lut3d=file='{lut_file}'")
-
-        if frei0r_effects:
-            for fx in frei0r_effects:
-                parts = fx.split(":", 1)
-                plugin_name = parts[0].strip()
-                if plugin_name == "vignette0r":
-                    plugin_name = "vignette"
-                if len(parts) > 1:
-                    param_val = parts[1].strip()
-                    vf_filters.append(f"frei0r=filter_name={plugin_name}:filter_params={param_val}")
-                else:
-                    vf_filters.append(f"frei0r=filter_name={plugin_name}")
-
-        vf_filters.append("format=yuv420p")
-        vf_chain = ",".join(vf_filters)
-
         try:
-            await asyncio.sleep(0.5)
-            VideoRenderService._update_job_status(job_id, "RENDERING", 30.0)
+            await asyncio.sleep(0.3)
+            VideoRenderService._update_job_status(job_id, "RENDERING", 25.0)
 
             # Determine input source clips
-            valid_sources = []
+            valid_clips = []
             for c in timeline_clips:
                 p = c.get("file_path") or c.get("path")
                 if p and Path(p).exists():
-                    valid_sources.append(p)
+                    valid_clips.append(c)
 
             # Fallback to demo video clips if no valid sources passed
-            if not valid_sources:
+            if not valid_clips:
                 demo_files = list(settings.VIDEO_UPLOAD_DIR.glob("*.mp4"))
                 if demo_files:
-                    valid_sources.append(str(demo_files[0]))
+                    valid_clips.append({
+                        "file_path": str(demo_files[0]),
+                        "duration": 5.0,
+                        "name": demo_files[0].name
+                    })
 
-            if valid_sources:
-                # Transcode & scale first source into target video specification
-                src = valid_sources[0]
+            # Always generate companion OpenShot / Kdenlive compatible MLT XML
+            mlt_xml = MLTTransitionService.generate_mlt_xml(
+                project_name=f"VYBE_{job_id}",
+                clips=valid_clips,
+                width=w,
+                height=h,
+                frame_rate=frame_rate,
+                transition_style=transition_style or "dissolve",
+                transition_duration=transition_duration
+            )
+            mlt_path = settings.VIDEO_EXPORTS_DIR / f"vybe_project_{job_id}.mlt"
+            mlt_path.write_text(mlt_xml, encoding="utf-8")
+            logger.info(f"Saved OpenShot/MLT XML: {mlt_path}")
+
+            # Option A: MLT Framework Engine ('melt')
+            if engine == "mlt":
+                VideoRenderService._update_job_status(job_id, "RENDERING", 50.0)
+                mlt_ok = await MLTTransitionService.render_with_mlt(
+                    xml_path=mlt_path,
+                    out_file=out_file,
+                    width=w,
+                    height=h,
+                    frame_rate=frame_rate
+                )
+                if mlt_ok:
+                    VideoRenderService._update_job_status(
+                        job_id, "COMPLETED", 100.0, output_path=str(out_file)
+                    )
+                    logger.info(f"Render job {job_id} successfully completed via MLT: {out_file}")
+                    return
+                logger.warning(f"MLT render for {job_id} failed or unavailable; falling back to FFmpeg engine.")
+
+            # Option B: High-Performance FFmpeg Complex Filtergraph
+            # Build professional video filterchain: Scale + Pad + 3D LUT (.cube) + Frei0r VFX
+            vf_filters = [
+                f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2"
+            ]
+
+            if lut_name and lut_name != "clean":
+                lut_file = settings.LUTS_DIR / f"{lut_name}.cube"
+                if lut_file.exists():
+                    vf_filters.append(f"lut3d=file='{lut_file}'")
+
+            if frei0r_effects:
+                for fx in frei0r_effects:
+                    parts = fx.split(":", 1)
+                    plugin_name = parts[0].strip()
+                    if plugin_name == "vignette0r":
+                        plugin_name = "vignette"
+                    if len(parts) > 1:
+                        param_val = parts[1].strip()
+                        vf_filters.append(f"frei0r=filter_name={plugin_name}:filter_params={param_val}")
+                    else:
+                        vf_filters.append(f"frei0r=filter_name={plugin_name}")
+
+            vf_filters.append("format=yuv420p")
+            vf_chain = ",".join(vf_filters)
+
+            if len(valid_clips) >= 2:
+                # Multi-clip timeline with programmatic xfade transitions & audio acrossfade
+                in_args, fc_str, af_str = MLTTransitionService.build_ffmpeg_xfade_pipeline(
+                    clips=valid_clips,
+                    width=w,
+                    height=h,
+                    frame_rate=frame_rate,
+                    transition_style=transition_style or "dissolve",
+                    transition_duration=transition_duration,
+                    lut_name=lut_name,
+                    frei0r_effects=frei0r_effects,
+                    pip_mode=pip_mode,
+                    pip_scale=pip_scale,
+                    luts_dir=settings.LUTS_DIR
+                )
+
+                cmd = [
+                    "ffmpeg", "-y",
+                    *in_args,
+                    "-filter_complex", fc_str,
+                    "-map", "[v_master_out]",
+                    "-r", str(int(frame_rate)),
+                    "-c:v", "libx264",
+                    "-preset", "veryfast",
+                    "-crf", "22",
+                    str(out_file)
+                ]
+            elif len(valid_clips) == 1:
+                # Single clip transcode & grade
+                src = valid_clips[0].get("file_path") or valid_clips[0].get("path")
                 cmd = [
                     "ffmpeg", "-y",
                     "-i", src,
@@ -247,8 +319,8 @@ class VideoRenderService:
                     str(out_file)
                 ]
 
-            VideoRenderService._update_job_status(job_id, "RENDERING", 60.0)
-            
+            VideoRenderService._update_job_status(job_id, "RENDERING", 65.0)
+
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
