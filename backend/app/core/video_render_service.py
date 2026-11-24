@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from app.config import settings
 from app.core.db import get_connection
+from app.core.mlt_transition_service import MLTTransitionService
 
 logger = logging.getLogger("vybe.render_service")
 
