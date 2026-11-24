@@ -27,6 +27,7 @@ export default function VybePlayer({
   onAspectRatioChange,
   activeVideoUrl,
   colorGrade = 'clean',
+  activeFrei0rEffects = [],
   activeOverlayTitle = '',
   showSafeZones = false,
   onToggleSafeZones
@@ -59,18 +60,51 @@ export default function VybePlayer({
   };
 
   const getColorFilter = () => {
+    let base = 'none';
     switch (colorGrade) {
+      case 'kodak_2383':
+        base = 'contrast(1.22) saturate(1.25) sepia(0.08) hue-rotate(-8deg)';
+        break;
+      case 'fuji_3513':
+        base = 'contrast(1.15) saturate(1.18) hue-rotate(6deg) brightness(0.98)';
+        break;
       case 'teal_orange':
-        return 'contrast(1.2) saturate(1.3) hue-rotate(-12deg)';
+        base = 'contrast(1.28) saturate(1.35) hue-rotate(-14deg)';
+        break;
       case 'cyberpunk':
-        return 'contrast(1.3) saturate(1.6) hue-rotate(25deg) drop-shadow(0 0 10px rgba(0,242,254,0.3))';
+      case 'cyberpunk_neon':
+        base = 'contrast(1.35) saturate(1.7) hue-rotate(25deg)';
+        break;
       case 'moody':
-        return 'contrast(1.35) brightness(0.85) saturate(0.7)';
+      case 'noir_silver':
+        base = 'grayscale(1) contrast(1.4) brightness(0.92)';
+        break;
       case 'vintage':
-        return 'sepia(0.4) contrast(1.1) brightness(0.95)';
+      case 'vintage_warm':
+        base = 'sepia(0.45) contrast(1.12) brightness(0.96) saturate(1.1)';
+        break;
       default:
-        return 'none';
+        base = 'none';
     }
+
+    const effects = [];
+    if (activeFrei0rEffects.some(e => e.includes('glow'))) {
+      effects.push('drop-shadow(0 0 14px rgba(255,255,255,0.65))');
+    }
+    if (activeFrei0rEffects.some(e => e.includes('rgbsplit0r'))) {
+      effects.push('drop-shadow(2px 0 0 rgba(255,0,0,0.6)) drop-shadow(-2px 0 0 rgba(0,255,255,0.6))');
+    }
+    if (activeFrei0rEffects.some(e => e.includes('glitch0r'))) {
+      effects.push('invert(0.08) contrast(1.2)');
+    }
+    if (activeFrei0rEffects.some(e => e.includes('sobel'))) {
+      effects.push('invert(1) contrast(2)');
+    }
+
+    if (effects.length > 0) {
+      return base === 'none' ? effects.join(' ') : `${base} ${effects.join(' ')}`;
+    }
+    return base;
   };
 
   const getAspectDimensions = () => {
