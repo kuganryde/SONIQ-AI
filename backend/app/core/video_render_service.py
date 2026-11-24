@@ -40,7 +40,12 @@ class VideoRenderService:
         frame_rate: float = 30.0,
         timeline_clips: Optional[List[Dict[str, Any]]] = None,
         lut_name: Optional[str] = None,
-        frei0r_effects: Optional[List[str]] = None
+        frei0r_effects: Optional[List[str]] = None,
+        transition_style: Optional[str] = "dissolve",
+        transition_duration: float = 0.75,
+        engine: str = "auto",
+        pip_mode: Optional[str] = None,
+        pip_scale: float = 0.28
     ) -> Dict[str, Any]:
         """Creates a new render job in QUEUED status."""
         job_id = f"job_{uuid.uuid4().hex[:10]}"
@@ -69,7 +74,12 @@ class VideoRenderService:
                     output_format=output_format,
                     timeline_clips=timeline_clips or [],
                     lut_name=lut_name,
-                    frei0r_effects=frei0r_effects or []
+                    frei0r_effects=frei0r_effects or [],
+                    transition_style=transition_style or "dissolve",
+                    transition_duration=transition_duration,
+                    engine=engine,
+                    pip_mode=pip_mode,
+                    pip_scale=pip_scale
                 )
             )
             return VideoRenderService.get_job(job_id)
@@ -88,9 +98,11 @@ class VideoRenderService:
                 return None
             job = dict(row)
             if job.get("output_file_path"):
-                filename = Path(job["output_file_path"]).name
                 job["download_url"] = f"/api/v1/render/download/{job_id}"
                 job["stream_url"] = f"/api/v1/render/stream/{job_id}"
+            mlt_path = settings.VIDEO_EXPORTS_DIR / f"vybe_project_{job_id}.mlt"
+            if mlt_path.exists():
+                job["mlt_url"] = f"/api/v1/render/mlt/{job_id}"
             return job
         finally:
             conn.close()
@@ -112,6 +124,9 @@ class VideoRenderService:
                 if j.get("output_file_path"):
                     j["download_url"] = f"/api/v1/render/download/{j['id']}"
                     j["stream_url"] = f"/api/v1/render/stream/{j['id']}"
+                mlt_path = settings.VIDEO_EXPORTS_DIR / f"vybe_project_{j['id']}.mlt"
+                if mlt_path.exists():
+                    j["mlt_url"] = f"/api/v1/render/mlt/{j['id']}"
                 jobs.append(j)
             return jobs
         finally:
