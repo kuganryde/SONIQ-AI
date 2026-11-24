@@ -380,10 +380,6 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
           onDismiss={() => setShowUpliftBanner(false)}
         />
       )}
-            <span>RELOAD DEMO SHOWREEL</span>
-          </button>
-        </div>
-      </div>
 
       {/* 2. Main Studio Split Grid (Top Left: Inspector/Tools, Top Right: Monitor) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 min-h-[440px]">
