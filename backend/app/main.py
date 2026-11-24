@@ -27,6 +27,7 @@ from app.core.surround_engine import SurroundLayout, SurroundPannerEngine
 from app.core.cinema_processor import DolbyProcessor, DTSProcessor, DolbyCodec, DTSCodec
 from app.core.synth_engine import SynthEngine
 from app.core.video_render_service import VideoRenderService
+from app.core.auto_edit_service import AutoEditService
 from app.agents.production_manager import ProductionManagerAgent
 from app.agents.audio_analyst import AudioAnalystAgent
 from app.agents.stem_separator import StemSeparatorAgent
