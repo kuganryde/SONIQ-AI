@@ -463,6 +463,12 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
                 onSelectColorGrade={(g) => setColorGrade(g)}
                 activeFrei0rEffects={activeFrei0rEffects}
                 onToggleFrei0rEffect={handleToggleFrei0rEffect}
+                selectedTransition={selectedTransition}
+                onSelectTransition={(t) => setSelectedTransition(t)}
+                transitionDuration={transitionDuration}
+                onChangeTransitionDuration={(d) => setTransitionDuration(d)}
+                pipMode={pipMode}
+                onSelectPipMode={(pm) => setPipMode(pm)}
                 onAddTitleOverlay={handleAddTitleOverlay}
               />
             )}
@@ -483,6 +489,11 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
                 timelineClips={videoClips}
                 selectedLut={colorGrade}
                 activeFrei0rEffects={activeFrei0rEffects}
+                selectedTransition={selectedTransition}
+                transitionDuration={transitionDuration}
+                renderEngine={renderEngine}
+                onSelectRenderEngine={(eng) => setRenderEngine(eng)}
+                pipMode={pipMode}
               />
             )}
           </div>
@@ -517,6 +528,8 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
         videoClips={videoClips}
         audioClips={audioClips}
         overlayClips={overlayClips}
+        selectedTransition={selectedTransition}
+        transitionDuration={transitionDuration}
         onSplitClip={handleSplitClip}
         onDeleteClip={handleDeleteClip}
         onSendToSoniq={onTransferAudioToSoniq}
