@@ -26,6 +26,7 @@ class Settings(BaseModel):
     PROXIES_DIR: Path = STORAGE_DIR / "proxies"
     THUMBNAILS_DIR: Path = STORAGE_DIR / "thumbnails"
     VIDEO_EXPORTS_DIR: Path = STORAGE_DIR / "video_exports"
+    LUTS_DIR: Path = STORAGE_DIR / "luts"
     
     # Database
     DATABASE_URL: str = f"sqlite:///{STORAGE_DIR}/soniq_ai.db"
@@ -68,5 +69,6 @@ for p in [
     settings.PROXIES_DIR,
     settings.THUMBNAILS_DIR,
     settings.VIDEO_EXPORTS_DIR,
+    settings.LUTS_DIR,
 ]:
     p.mkdir(parents=True, exist_ok=True)
