@@ -436,10 +436,12 @@ export default function VybeHITLModal({
 
               <div className="flex flex-wrap items-center gap-1.5">
                 {[
+                  { id: 'kodak_2383', label: 'Kodak 2383' },
+                  { id: 'fuji_3513', label: 'Fuji 3513' },
                   { id: 'teal_orange', label: 'Teal & Orange' },
-                  { id: 'cyberpunk', label: 'Cyberpunk Neon' },
-                  { id: 'moody', label: 'Moody Cinema' },
-                  { id: 'vintage', label: 'Vintage 35mm' },
+                  { id: 'cyberpunk_neon', label: 'Cyberpunk' },
+                  { id: 'noir_silver', label: 'Noir Silver' },
+                  { id: 'vintage_warm', label: 'Vintage 35mm' },
                   { id: 'clean', label: 'Clean Rec.709' }
                 ].map(lut => (
                   <button
