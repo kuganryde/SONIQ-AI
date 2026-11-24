@@ -13,10 +13,12 @@ import RecordingStudio from './components/RecordingStudio';
 import ExportCenter from './components/ExportCenter';
 import QuickFXModal from './components/QuickFXModal';
 import QuickFXBanner from './components/QuickFXBanner';
+import VybeVideoStudio from './components/VybeVideoStudio';
 import { audioEngine } from './audio/WebAudioEngine';
 import { apiUrl, safeFetchJson, resolveAudioUrl, getApiBase, setApiBaseOverride } from './config/api';
 
 export default function App() {
+  const [workspaceMode, setWorkspaceMode] = useState('vybe'); // 'vybe' (Video) or 'soniq' (Audio DAW)
   const [activeTab, setActiveTab] = useState('studio');
   const [tracks, setTracks] = useState([]);
   const [activeTrackId, setActiveTrackId] = useState(null);
