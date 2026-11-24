@@ -148,3 +148,38 @@ def test_effects_library():
     assert "frei0r_effects" in data
     assert len(data["frei0r_effects"]) >= 5
     assert data["total_frei0r_installed"] >= 100
+
+
+def test_transitions_and_mlt_export():
+    # 1. Transitions library
+    trans_res = client.get("/api/v1/video/transitions/library")
+    assert trans_res.status_code == 200
+    catalog = trans_res.json()
+    assert "transitions" in catalog
+    assert len(catalog["transitions"]) >= 10
+    assert "compositing_modes" in catalog
+    assert catalog["engines_available"]["mlt_melt"] is True
+
+    # 2. Render with transition
+    render_payload = {
+        "project_id": "proj_vybe_demo",
+        "profile_name": "Web 720p H.264",
+        "output_format": "mp4",
+        "resolution": "720p",
+        "frame_rate": 30.0,
+        "lut_name": "kodak_2383",
+        "transition_style": "wipeleft",
+        "transition_duration": 0.5,
+        "engine": "auto",
+        "clips": []
+    }
+    render_res = client.post("/api/v1/render/video", json=render_payload)
+    assert render_res.status_code == 200
+    job = render_res.json()
+    assert "id" in job
+
+    # 3. Project MLT XML Export
+    mlt_res = client.get("/api/v1/projects/proj_vybe_demo/export-mlt")
+    assert mlt_res.status_code == 200
+    assert "application/xml" in mlt_res.headers["content-type"]
+    assert b"<mlt" in mlt_res.content
