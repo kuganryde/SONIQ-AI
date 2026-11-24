@@ -1418,3 +1418,101 @@ async def download_rendered_video(job_id: str):
     p = Path(job["output_file_path"])
     filename = p.name
     return FileResponse(p, filename=filename, media_type="video/mp4")
+
+
+# --- Autonomous Video Detection, Auto-Cut, Captions, Effects & HITL Uplift ---
+
+class AutoUpliftAnalyzeRequest(BaseModel):
+    asset_id: str
+    pacing: str = "fast"
+    target_aspect_ratio: str = "9:16"
+    style_preset: str = "cyberpunk"
+
+
+class AutoUpliftApplyRequest(BaseModel):
+    project_id: str = "proj_vybe_demo"
+    asset_id: str
+    approved_cuts: List[Dict[str, Any]] = []
+    approved_captions: List[Dict[str, Any]] = []
+    color_grade: str = "teal_orange"
+    aspect_ratio: str = "9:16"
+    hook_title: str = "⚡ VYBE AI AUTONOMOUS UPLIFT"
+    include_bgm: bool = True
+
+
+@app.post("/api/v1/video/auto-uplift/analyze")
+async def analyze_and_propose_uplift(req: AutoUpliftAnalyzeRequest):
+    """
+    Autonomous Video Detection, Silence Trimming, Smart Cuts & Captions.
+    Generates an interactive Human-in-the-Loop (HITL) proposal for creator review.
+    """
+    try:
+        proposal = AutoEditService.analyze_and_propose(
+            asset_id=req.asset_id,
+            pacing=req.pacing,
+            target_aspect_ratio=req.target_aspect_ratio,
+            style_preset=req.style_preset
+        )
+        return proposal
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Auto-uplift analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/video/auto-uplift/apply")
+async def apply_approved_uplift(req: AutoUpliftApplyRequest):
+    """
+    Applies approved Human-in-the-Loop (HITL) video cuts, captions, effects,
+    and audio downmix directly to the multitrack timeline.
+    """
+    try:
+        uplifted = AutoEditService.apply_uplift_to_timeline(
+            project_id=req.project_id,
+            asset_id=req.asset_id,
+            approved_cuts=req.approved_cuts,
+            approved_captions=req.approved_captions,
+            color_grade=req.color_grade,
+            aspect_ratio=req.aspect_ratio,
+            hook_title=req.hook_title,
+            include_bgm=req.include_bgm
+        )
+        return uplifted
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Auto-uplift apply error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/video/auto-uplift/instant")
+async def instant_auto_uplift(req: AutoUpliftAnalyzeRequest):
+    """
+    1-Click Autonomous Video Uplift: Automatically analyzes, cuts, captions,
+    and applies effects in a single seamless operation.
+    """
+    try:
+        proposal = AutoEditService.analyze_and_propose(
+            asset_id=req.asset_id,
+            pacing=req.pacing,
+            target_aspect_ratio=req.target_aspect_ratio,
+            style_preset=req.style_preset
+        )
+        uplifted = AutoEditService.apply_uplift_to_timeline(
+            project_id="proj_vybe_demo",
+            asset_id=req.asset_id,
+            approved_cuts=proposal["cuts"],
+            approved_captions=proposal["captions"],
+            color_grade=proposal["effects"]["lut"],
+            aspect_ratio=proposal["target_aspect_ratio"],
+            hook_title=proposal["effects"]["overlay_hook"],
+            include_bgm=True
+        )
+        return {
+            "proposal": proposal,
+            "timeline": uplifted
+        }
+    except Exception as e:
+        logger.exception(f"Instant auto-uplift error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
