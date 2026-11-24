@@ -1157,6 +1157,11 @@ class RenderVideoRequest(BaseModel):
     clips: List[Dict[str, Any]] = []
     lut_name: Optional[str] = None
     frei0r_effects: List[str] = []
+    transition_style: Optional[str] = "dissolve"
+    transition_duration: float = 0.75
+    engine: str = "auto"
+    pip_mode: Optional[str] = None
+    pip_scale: float = 0.28
 
 
 @app.get("/api/v1/projects")
