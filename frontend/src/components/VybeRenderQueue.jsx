@@ -249,6 +249,17 @@ export default function VybeRenderQueue({
                       <span>DOWNLOAD</span>
                     </a>
                   )}
+
+                  {j.status === 'COMPLETED' && (
+                    <a
+                      href={apiUrl(`/api/v1/render/mlt/${j.id}`)}
+                      download={`vybe_${j.id}.mlt`}
+                      title="Download OpenShot/Kdenlive MLT Project XML"
+                      className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono transition"
+                    >
+                      <span>MLT</span>
+                    </a>
+                  )}
                 </div>
               </div>
 
