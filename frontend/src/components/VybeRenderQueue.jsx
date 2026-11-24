@@ -136,6 +136,22 @@ export default function VybeRenderQueue({
           </div>
         </div>
 
+        {/* Active Look & VFX Pipeline Telemetry */}
+        <div className="flex flex-wrap items-center justify-between p-2 rounded-lg bg-black/40 border border-slate-800 text-[11px] font-mono">
+          <div className="flex items-center space-x-2">
+            <span className="text-slate-400">3D LUT:</span>
+            <span className="px-1.5 py-0.5 rounded bg-violet-950/80 border border-violet-700/60 text-violet-300 font-bold uppercase">
+              {selectedLut || 'None (Rec.709)'}
+            </span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-slate-400">Frei0r VFX:</span>
+            <span className="px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-700/60 text-cyan-300 font-bold">
+              {activeFrei0rEffects.length > 0 ? `${activeFrei0rEffects.length} active (${activeFrei0rEffects.join(', ')})` : '0 active'}
+            </span>
+          </div>
+        </div>
+
         <button
           onClick={handleStartRender}
           disabled={isSubmitting}
