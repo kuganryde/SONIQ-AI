@@ -1377,7 +1377,7 @@ async def director_plan_video(req: DirectorPlanRequest):
 
 @app.post("/api/v1/render/video")
 async def render_video_timeline(req: RenderVideoRequest):
-    """Queues a professional video timeline render job with 3D LUT and Frei0r VFX support."""
+    """Queues a professional video timeline render job with 3D LUT, Frei0r VFX, and MLT transitions."""
     job = VideoRenderService.create_job(
         project_id=req.project_id,
         profile_name=req.profile_name,
@@ -1386,7 +1386,12 @@ async def render_video_timeline(req: RenderVideoRequest):
         frame_rate=req.frame_rate,
         timeline_clips=req.clips,
         lut_name=req.lut_name,
-        frei0r_effects=req.frei0r_effects
+        frei0r_effects=req.frei0r_effects,
+        transition_style=req.transition_style,
+        transition_duration=req.transition_duration,
+        engine=req.engine,
+        pip_mode=req.pip_mode,
+        pip_scale=req.pip_scale
     )
     return job
 
@@ -1410,7 +1415,7 @@ async def get_effects_library():
         {"id": "glitch0r", "name": "Digital Glitch & Noise", "filter": "glitch0r", "desc": "Cyberpunk digital transmission artifact corruption", "category": "Glitch"},
         {"id": "sobel", "name": "Cyberpunk Edge Tracer", "filter": "sobel", "desc": "High-contrast neon contour edge detection", "category": "Stylized"},
         {"id": "pixeliz0r", "name": "Retro 8-Bit Pixelation", "filter": "pixeliz0r:0.02", "desc": "Retro arcade pixel reduction mosaic", "category": "Retro"},
-        {"id": "vignette0r", "name": "Anamorphic Vignette Falloff", "filter": "vignette0r", "desc": "Gentle optical edge darkening to focus viewer attention", "category": "Optical"}
+        {"id": "vignette", "name": "Anamorphic Vignette Falloff", "filter": "vignette", "desc": "Gentle optical edge darkening to focus viewer attention", "category": "Optical"}
     ]
 
     return {
@@ -1419,6 +1424,57 @@ async def get_effects_library():
         "frei0r_effects": frei0r_vfx,
         "total_frei0r_installed": 136
     }
+
+
+@app.get("/api/v1/video/transitions/library")
+async def get_transitions_library():
+    """Returns catalog of 16+ Hollywood transitions and MLT compositing modes."""
+    return MLTTransitionService.get_catalog()
+
+
+@app.get("/api/v1/projects/{project_id}/export-mlt")
+async def export_project_mlt(project_id: str):
+    """Exports and downloads an OpenShot/Kdenlive compatible MLT XML project file."""
+    proj = ProjectService.get_project(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    assets = ProjectService.list_project_assets(project_id)
+    clips = []
+    for a in assets:
+        if a.get("media_type") == "video":
+            clips.append({
+                "file_path": a.get("file_path"),
+                "duration": a.get("duration_seconds", 4.0),
+                "name": a.get("file_name")
+            })
+
+    w = proj.get("width", 1920)
+    h = proj.get("height", 1080)
+    fps = proj.get("frame_rate", 30.0)
+
+    xml_content = MLTTransitionService.generate_mlt_xml(
+        project_name=proj.get("name", "VYBE Project"),
+        clips=clips,
+        width=w,
+        height=h,
+        frame_rate=fps,
+        transition_style="dissolve",
+        transition_duration=0.75
+    )
+
+    out_path = settings.VIDEO_EXPORTS_DIR / f"{project_id}_openshot.mlt"
+    out_path.write_text(xml_content, encoding="utf-8")
+    return FileResponse(out_path, filename=f"{project_id}_openshot.mlt", media_type="application/xml")
+
+
+@app.get("/api/v1/render/mlt/{job_id}")
+async def download_render_mlt_xml(job_id: str):
+    """Downloads the generated OpenShot MLT XML for a completed render job."""
+    mlt_path = settings.VIDEO_EXPORTS_DIR / f"vybe_project_{job_id}.mlt"
+    if not mlt_path.exists():
+        raise HTTPException(status_code=404, detail="MLT project file not found for this render job")
+    return FileResponse(mlt_path, filename=f"vybe_project_{job_id}.mlt", media_type="application/xml")
 
 
 @app.get("/api/v1/render/jobs")
