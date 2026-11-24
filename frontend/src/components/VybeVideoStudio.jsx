@@ -235,6 +235,16 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
     setActiveOverlayTitle(titleText);
   };
 
+  const handleToggleFrei0rEffect = (fxId) => {
+    setActiveFrei0rEffects(prev => {
+      if (prev.includes(fxId)) {
+        return prev.filter(id => id !== fxId);
+      } else {
+        return [...prev, fxId];
+      }
+    });
+  };
+
   const handleApplyStoryboard = (sb) => {
     if (!sb || !sb.scenes) return;
     let timeCursor = 0.0;
