@@ -123,9 +123,6 @@ export default function VybeMotionStudio({
           <span>Titles</span>
         </button>
       </div>
-          <span>Titles & Lower Thirds</span>
-        </button>
-      </div>
 
       {/* Tab 1: 3D LUT Hollywood Cinema Stocks */}
       {activeTab === 'luts' && (
