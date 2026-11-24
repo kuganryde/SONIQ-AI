@@ -9,7 +9,9 @@ import {
   Eye, 
   CheckCircle2, 
   Clock, 
-  Layers
+  Layers,
+  Wand2,
+  Sparkles
 } from 'lucide-react';
 import { apiUrl, safeFetchJson, resolveAudioUrl } from '../config/api';
 
@@ -17,7 +19,8 @@ export default function VybeAssetBin({
   assets = [],
   onUploadSuccess,
   onAddToTimeline,
-  onSelectForPreview
+  onSelectForPreview,
+  onOpenUplift
 }) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -45,6 +48,10 @@ export default function VybeAssetBin({
       }
       const data = await res.json();
       if (onUploadSuccess) onUploadSuccess(data);
+      // Automatically trigger HITL Uplift if uploaded asset is a video
+      if (data.media_type === 'video' && onOpenUplift) {
+        onOpenUplift(data);
+      }
     } catch (err) {
       console.error('Upload failed:', err);
       setUploadError(err.message || 'File upload failed');
