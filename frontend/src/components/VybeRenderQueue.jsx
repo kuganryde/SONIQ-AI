@@ -90,15 +90,24 @@ export default function VybeRenderQueue({
           <div className="flex items-center space-x-2">
             <Film className="w-4 h-4 text-cyan-400" />
             <h4 className="text-xs font-bold text-slate-200 uppercase font-mono">
-              Broadcast Video Render Engine
+              Dual Broadcast Render Engine (FFmpeg & MLT)
             </h4>
           </div>
-          <span className="text-[10px] font-mono text-cyan-400 font-bold bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800/80">
-            FFmpeg 6.1.1 srv1302021
-          </span>
+          <div className="flex items-center space-x-1.5">
+            <a
+              href={apiUrl('/api/v1/projects/proj_vybe_demo/export-mlt')}
+              download="vybe_project_openshot.mlt"
+              className="px-2 py-0.5 rounded bg-violet-950/80 border border-violet-700/60 text-violet-300 font-mono text-[10px] font-bold hover:bg-violet-900 transition flex items-center space-x-1"
+            >
+              <span>EXPORT OPENSHOT .MLT</span>
+            </a>
+            <span className="text-[10px] font-mono text-cyan-400 font-bold bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800/80">
+              melt 7.22.0 + FFmpeg 6.1
+            </span>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
           {/* Resolution Picker */}
           <div>
             <label className="text-[10px] font-mono text-slate-400 block mb-1">RESOLUTION</label>
@@ -143,20 +152,40 @@ export default function VybeRenderQueue({
               <option value={60}>60.0 fps (High Smoothness)</option>
             </select>
           </div>
+
+          {/* Render Engine Selector */}
+          <div>
+            <label className="text-[10px] font-mono text-slate-400 block mb-1">RENDER ENGINE</label>
+            <select
+              value={renderEngine}
+              onChange={(e) => onSelectRenderEngine && onSelectRenderEngine(e.target.value)}
+              className="w-full bg-[#080b11] border border-slate-800 rounded-lg p-1.5 text-xs text-slate-200 font-mono focus:border-amber-500"
+            >
+              <option value="auto">Auto Adaptive (FFmpeg + MLT)</option>
+              <option value="ffmpeg">FFmpeg FilterComplex (Fast)</option>
+              <option value="mlt">MLT Framework (melt / OpenShot)</option>
+            </select>
+          </div>
         </div>
 
         {/* Active Look & VFX Pipeline Telemetry */}
-        <div className="flex flex-wrap items-center justify-between p-2 rounded-lg bg-black/40 border border-slate-800 text-[11px] font-mono">
+        <div className="flex flex-wrap items-center justify-between p-2 rounded-lg bg-black/40 border border-slate-800 text-[11px] font-mono gap-1">
           <div className="flex items-center space-x-2">
             <span className="text-slate-400">3D LUT:</span>
             <span className="px-1.5 py-0.5 rounded bg-violet-950/80 border border-violet-700/60 text-violet-300 font-bold uppercase">
-              {selectedLut || 'None (Rec.709)'}
+              {selectedLut || 'None'}
             </span>
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-slate-400">Frei0r VFX:</span>
             <span className="px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-700/60 text-cyan-300 font-bold">
-              {activeFrei0rEffects.length > 0 ? `${activeFrei0rEffects.length} active (${activeFrei0rEffects.join(', ')})` : '0 active'}
+              {activeFrei0rEffects.length > 0 ? `${activeFrei0rEffects.length} active` : '0 active'}
+            </span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-slate-400">Transition:</span>
+            <span className="px-1.5 py-0.5 rounded bg-amber-950/80 border border-amber-700/60 text-amber-300 font-bold uppercase">
+              {selectedTransition} ({transitionDuration}s)
             </span>
           </div>
         </div>
