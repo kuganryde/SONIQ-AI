@@ -7,6 +7,10 @@
       "destination": "https://n8n.rydetechglobal.com/soniq-api/:path*"
     },
     {
+      "source": "/vybe-api/:path*",
+      "destination": "https://n8n.rydetechglobal.com/vybe-api/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
