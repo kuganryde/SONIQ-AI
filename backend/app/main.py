@@ -69,7 +69,15 @@ def _ensure_brand_sound_logo(sample_rate: int = 48000, duration_sec: float = 3.2
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Initializing RYDETECH SONIQ AI Sovereign Professional Audio Platform...")
+    logger.info("Initializing RYDETECH VYBE AI & SONIQ Sovereign Media Production Platform...")
+    # Initialize SQLite database schema
+    init_db()
+    try:
+        ProjectService.ensure_demo_media_project()
+        logger.info("VYBE AI demonstration project initialized and ready.")
+    except Exception as e:
+        logger.warning(f"Demo media project initialization warning: {e}")
+
     # Prune stale temporary audio derivatives (preserves immutable uploads/)
     pruned = AudioCacheManager.prune_temporary_storage(settings.STORAGE_DIR, max_age_hours=48)
     logger.info(f"Storage resource check: pruned {pruned} temporary stale files.")
@@ -79,7 +87,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to generate initial sound logo: {e}")
     yield
-    logger.info("Shutting down RYDETECH SONIQ AI Platform.")
+    logger.info("Shutting down RYDETECH VYBE & SONIQ AI Platform.")
 
 
 app = FastAPI(
