@@ -200,6 +200,16 @@ export default function VybePlayer({
             </div>
           )}
 
+          {/* Anamorphic Vignette Overlay (Frei0r VFX simulation) */}
+          {activeFrei0rEffects.some(e => e.includes('vignette')) && (
+            <div 
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: 'radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.7) 100%)'
+              }}
+            />
+          )}
+
           {/* Social Safe Zones Overlay (for TikTok / Instagram Reels) */}
           {showSafeZones && (
             <div className="absolute inset-0 pointer-events-none border-2 border-red-500/40 flex flex-col justify-between p-3 select-none">
