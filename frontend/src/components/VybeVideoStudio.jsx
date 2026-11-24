@@ -505,6 +505,15 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
         onDeleteClip={handleDeleteClip}
         onSendToSoniq={onTransferAudioToSoniq}
       />
+
+      {/* 4. Autonomous Video Uplift & AI Editor (HITL Modal) */}
+      <VybeHITLModal
+        isOpen={isHITLOpen}
+        onClose={() => setIsHITLOpen(false)}
+        asset={selectedAssetForUplift}
+        onApplyUplift={handleApplyUplift}
+        onApplyAndRender={handleApplyAndRender}
+      />
     </div>
   );
 }
