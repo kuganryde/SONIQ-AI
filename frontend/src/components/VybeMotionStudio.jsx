@@ -18,10 +18,16 @@ export default function VybeMotionStudio({
   onSelectColorGrade,
   activeFrei0rEffects = [],
   onToggleFrei0rEffect,
+  selectedTransition = 'dissolve',
+  onSelectTransition,
+  transitionDuration = 0.75,
+  onChangeTransitionDuration,
+  pipMode = 'single',
+  onSelectPipMode,
   onAddTitleOverlay
 }) {
   const [customTitle, setCustomTitle] = useState('RYDETECH VYBE AI');
-  const [activeTab, setActiveTab] = useState('luts'); // 'luts', 'vfx', 'titles'
+  const [activeTab, setActiveTab] = useState('luts'); // 'luts', 'vfx', 'transitions', 'titles'
 
   const luts = [
     { id: 'kodak_2383', name: 'Kodak 2383 Film Print', desc: 'Hollywood standard print stock emulation with deep teal shadows & amber highlight roll-off.', tag: 'Hollywood 3D LUT' },
@@ -42,6 +48,28 @@ export default function VybeMotionStudio({
     { id: 'vignette', name: 'Anamorphic Vignette Falloff', desc: 'Gentle optical edge darkening focusing viewer attention on the subject.', icon: '🎬' }
   ];
 
+  const transitions = [
+    { id: 'dissolve', name: 'Crossfade Dissolve', icon: '⧖', cat: 'Dissolve', desc: 'Smooth optical blend' },
+    { id: 'wipeleft', name: 'Wipe (Left)', icon: '◀', cat: 'Wipe', desc: 'Leftward curtain wipe' },
+    { id: 'wiperight', name: 'Wipe (Right)', icon: '▶', cat: 'Wipe', desc: 'Rightward curtain wipe' },
+    { id: 'wipeup', name: 'Wipe (Up)', icon: '▲', cat: 'Wipe', desc: 'Vertical upward curtain' },
+    { id: 'slideleft', name: 'Push Slide (Left)', icon: '⇚', cat: 'Slide', desc: 'Dynamic camera push' },
+    { id: 'slideright', name: 'Push Slide (Right)', icon: '⇛', cat: 'Slide', desc: 'Right push motion' },
+    { id: 'circlecrop', name: 'Iris Circle Reveal', icon: '◉', cat: 'Iris', desc: 'Circular zoom aperture' },
+    { id: 'radial', name: 'Clock Radial Wipe', icon: '◔', cat: 'Iris', desc: '360° angular sweep' },
+    { id: 'zoomin', name: 'High-Speed Zoom', icon: '⊕', cat: 'Zoom', desc: 'Dynamic focal punch' },
+    { id: 'pixelize', name: '8-Bit Mosaic Dissolve', icon: '▦', cat: 'Retro', desc: 'Digital pixel reduction' },
+    { id: 'hblur', name: 'Horizontal Whip Blur', icon: '≋', cat: 'Blur', desc: 'Fast motion blur pan' },
+    { id: 'fadeblack', name: 'Dip to Black', icon: '▪', cat: 'Dip', desc: 'Color fade transition' }
+  ];
+
+  const compositingModes = [
+    { id: 'single', name: 'Single Master', desc: 'Sequential timeline without PIP' },
+    { id: 'pip_top_right', name: 'PIP Top-Right', desc: 'Corner Picture-in-Picture' },
+    { id: 'pip_bottom_right', name: 'PIP Bottom-Right', desc: 'Lower corner Picture-in-Picture' },
+    { id: 'split_horizontal', name: '50/50 Dual Split', desc: 'Side-by-side split screen' }
+  ];
+
   const titlePresets = [
     { title: 'RYDETECH GLOBAL ENTERPRISE', subtitle: 'Sovereign AI & Automation Architecture' },
     { title: 'VYBE AI SHOWCASE', subtitle: 'Autonomous Media Studio v1.0' },
@@ -55,34 +83,46 @@ export default function VybeMotionStudio({
       <div className="flex items-center space-x-1 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-mono">
         <button
           onClick={() => setActiveTab('luts')}
-          className={`flex-1 py-1.5 rounded-lg flex items-center justify-center space-x-1.5 transition ${
+          className={`flex-1 py-1.5 rounded-lg flex items-center justify-center space-x-1 transition ${
             activeTab === 'luts' ? 'bg-cyan-500 text-black font-bold shadow' : 'text-slate-400 hover:text-white'
           }`}
         >
           <Palette className="w-3.5 h-3.5" />
-          <span>3D LUTs ({luts.length})</span>
+          <span>3D LUTs</span>
         </button>
         <button
           onClick={() => setActiveTab('vfx')}
-          className={`flex-1 py-1.5 rounded-lg flex items-center justify-center space-x-1.5 transition ${
+          className={`flex-1 py-1.5 rounded-lg flex items-center justify-center space-x-1 transition ${
             activeTab === 'vfx' ? 'bg-violet-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'
           }`}
         >
           <Zap className="w-3.5 h-3.5" />
-          <span>Frei0r VFX (136)</span>
+          <span>Frei0r VFX</span>
           {activeFrei0rEffects.length > 0 && (
-            <span className="ml-1 px-1 rounded-full bg-cyan-400 text-black text-[9px]">
+            <span className="ml-0.5 px-1 rounded-full bg-cyan-400 text-black text-[9px]">
               {activeFrei0rEffects.length}
             </span>
           )}
         </button>
         <button
+          onClick={() => setActiveTab('transitions')}
+          className={`flex-1 py-1.5 rounded-lg flex items-center justify-center space-x-1 transition ${
+            activeTab === 'transitions' ? 'bg-amber-500 text-black font-bold shadow' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Layers className="w-3.5 h-3.5" />
+          <span>Transitions</span>
+        </button>
+        <button
           onClick={() => setActiveTab('titles')}
-          className={`flex-1 py-1.5 rounded-lg flex items-center justify-center space-x-1.5 transition ${
+          className={`flex-1 py-1.5 rounded-lg flex items-center justify-center space-x-1 transition ${
             activeTab === 'titles' ? 'bg-indigo-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'
           }`}
         >
           <Type className="w-3.5 h-3.5" />
+          <span>Titles</span>
+        </button>
+      </div>
           <span>Titles & Lower Thirds</span>
         </button>
       </div>
