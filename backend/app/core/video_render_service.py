@@ -37,7 +37,9 @@ class VideoRenderService:
         output_format: str = "mp4",
         resolution: str = "1080p",
         frame_rate: float = 30.0,
-        timeline_clips: Optional[List[Dict[str, Any]]] = None
+        timeline_clips: Optional[List[Dict[str, Any]]] = None,
+        lut_name: Optional[str] = None,
+        frei0r_effects: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """Creates a new render job in QUEUED status."""
         job_id = f"job_{uuid.uuid4().hex[:10]}"
@@ -64,7 +66,9 @@ class VideoRenderService:
                     resolution=resolution,
                     frame_rate=frame_rate,
                     output_format=output_format,
-                    timeline_clips=timeline_clips or []
+                    timeline_clips=timeline_clips or [],
+                    lut_name=lut_name,
+                    frei0r_effects=frei0r_effects or []
                 )
             )
             return VideoRenderService.get_job(job_id)
