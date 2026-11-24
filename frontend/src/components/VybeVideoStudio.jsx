@@ -277,6 +277,48 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
     setActivePanel('assets');
   };
 
+  const handleOpenUplift = (assetToUplift) => {
+    const target = assetToUplift || assets.find(a => a.media_type === 'video') || assets[0];
+    if (target) {
+      setSelectedAssetForUplift(target);
+      setIsHITLOpen(true);
+    }
+  };
+
+  const handleApplyUplift = (upliftedData) => {
+    if (!upliftedData) return;
+    if (upliftedData.video_clips) setVideoClips(upliftedData.video_clips);
+    if (upliftedData.audio_clips) setAudioClips(upliftedData.audio_clips);
+    if (upliftedData.overlay_clips) setOverlayClips(upliftedData.overlay_clips);
+    if (upliftedData.color_grade) setColorGrade(upliftedData.color_grade);
+    if (upliftedData.aspect_ratio) setAspectRatio(upliftedData.aspect_ratio);
+    if (upliftedData.hook_title) setActiveOverlayTitle(upliftedData.hook_title);
+    if (upliftedData.total_duration) setDuration(upliftedData.total_duration);
+    setCurrentTime(0.0);
+    setIsPlaying(true);
+  };
+
+  const handleApplyAndRender = async (upliftedData) => {
+    handleApplyUplift(upliftedData);
+    setActivePanel('render');
+    try {
+      await safeFetchJson(apiUrl('/api/v1/render/video'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: 'proj_vybe_demo',
+          profile_name: 'Web 1080p H.264',
+          output_format: 'mp4',
+          resolution: upliftedData.aspect_ratio === '9:16' ? '9:16' : '1080p',
+          frame_rate: 30.0,
+          clips: upliftedData.video_clips || []
+        })
+      });
+    } catch (e) {
+      console.error("Failed to auto-trigger render:", e);
+    }
+  };
+
   const tabs = [
     { id: 'assets', label: 'Media Bin', icon: FolderOpen, count: assets.length },
     { id: 'director', label: 'AI Director', icon: Bot, badge: 'Ollama' },
@@ -313,11 +355,31 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
 
         <div className="flex items-center space-x-2">
           <button
+            onClick={() => handleOpenUplift(assets[0])}
+            className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-400 via-sky-400 to-violet-500 hover:from-cyan-300 hover:to-violet-400 text-black font-mono text-xs font-bold flex items-center space-x-1.5 shadow-md shadow-cyan-400/20 transition cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5 fill-black" />
+            <span>AI AUTO-UPLIFT (HITL)</span>
+          </button>
+          <button
             onClick={loadDemoShowreel}
             disabled={isLoadingDemo}
             className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-400 text-slate-200 text-xs font-mono flex items-center space-x-1.5 transition shadow"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isLoadingDemo ? 'animate-spin' : ''}`} />
+            <span>RELOAD DEMO</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Autonomous Video Uplift Quick Action Banner */}
+      {showUpliftBanner && (
+        <VybeUpliftBanner
+          assetName={assets[0]?.file_name}
+          onOpenUplift={() => handleOpenUplift(assets[0])}
+          onDismiss={() => setShowUpliftBanner(false)}
+        />
+      )}
             <span>RELOAD DEMO SHOWREEL</span>
           </button>
         </div>
