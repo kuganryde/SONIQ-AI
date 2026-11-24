@@ -457,6 +457,8 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
               <VybeMotionStudio
                 activeColorGrade={colorGrade}
                 onSelectColorGrade={(g) => setColorGrade(g)}
+                activeFrei0rEffects={activeFrei0rEffects}
+                onToggleFrei0rEffect={handleToggleFrei0rEffect}
                 onAddTitleOverlay={handleAddTitleOverlay}
               />
             )}
@@ -475,6 +477,8 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
                 currentResolution="1080p"
                 currentAspectRatio={aspectRatio}
                 timelineClips={videoClips}
+                selectedLut={colorGrade}
+                activeFrei0rEffects={activeFrei0rEffects}
               />
             )}
           </div>
@@ -493,6 +497,7 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
             onAspectRatioChange={(ar) => setAspectRatio(ar)}
             activeVideoUrl={activeVideoUrl}
             colorGrade={colorGrade}
+            activeFrei0rEffects={activeFrei0rEffects}
             activeOverlayTitle={activeOverlayTitle}
             showSafeZones={showSafeZones}
             onToggleSafeZones={() => setShowSafeZones(!showSafeZones)}
