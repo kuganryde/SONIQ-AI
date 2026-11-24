@@ -33,6 +33,10 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [colorGrade, setColorGrade] = useState('kodak_2383');
   const [activeFrei0rEffects, setActiveFrei0rEffects] = useState(['glow:0.4']);
+  const [selectedTransition, setSelectedTransition] = useState('wipeleft');
+  const [transitionDuration, setTransitionDuration] = useState(0.75);
+  const [renderEngine, setRenderEngine] = useState('auto');
+  const [pipMode, setPipMode] = useState('single');
   const [showSafeZones, setShowSafeZones] = useState(false);
   const [activeOverlayTitle, setActiveOverlayTitle] = useState('');
   const [activeVideoUrl, setActiveVideoUrl] = useState('');
