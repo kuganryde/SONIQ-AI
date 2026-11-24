@@ -137,3 +137,14 @@ def test_auto_uplift_pipeline():
     assert len(timeline["overlay_clips"]) >= 2
     assert timeline["aspect_ratio"] == "9:16"
     assert timeline["color_grade"] == "teal_orange"
+
+
+def test_effects_library():
+    res = client.get("/api/v1/video/effects/library")
+    assert res.status_code == 200
+    data = res.json()
+    assert "luts" in data
+    assert len(data["luts"]) >= 6
+    assert "frei0r_effects" in data
+    assert len(data["frei0r_effects"]) >= 5
+    assert data["total_frei0r_installed"] >= 100
