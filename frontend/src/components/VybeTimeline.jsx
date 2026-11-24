@@ -24,6 +24,8 @@ export default function VybeTimeline({
   videoClips = [],
   audioClips = [],
   overlayClips = [],
+  selectedTransition = 'dissolve',
+  transitionDuration = 0.75,
   onSplitClip,
   onDeleteClip,
   onAddClip,
@@ -266,6 +268,21 @@ export default function VybeTimeline({
                     <div className="flex-1 bg-cyan-400/40 rounded-sm" />
                     <div className="flex-1 bg-cyan-400/40 rounded-sm" />
                   </div>
+                </div>
+              ))}
+
+              {/* Inter-Clip Transition Badges */}
+              {videoClips.slice(0, -1).map((c, idx) => (
+                <div
+                  key={`trans_${idx}`}
+                  style={{
+                    left: `${(c.start_time + c.duration) * zoom - 12}px`,
+                    zIndex: 25
+                  }}
+                  title={`Transition: ${selectedTransition} (${transitionDuration}s)`}
+                  className="absolute top-4 w-6 h-6 rounded-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-yellow-300 border border-amber-200 text-black flex items-center justify-center font-mono text-[9px] font-extrabold shadow-md shadow-amber-500/30 cursor-pointer transition select-none"
+                >
+                  ⧖
                 </div>
               ))}
             </div>
