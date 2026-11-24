@@ -147,15 +147,34 @@ class VideoRenderService:
         resolution: str,
         frame_rate: float,
         output_format: str,
-        timeline_clips: List[Dict[str, Any]]
+        timeline_clips: List[Dict[str, Any]],
+        lut_name: Optional[str] = None,
+        frei0r_effects: Optional[List[str]] = None
     ):
         """Asynchronous worker that builds and runs the FFmpeg rendering pipeline."""
-        logger.info(f"Starting render job {job_id} ({resolution} @ {frame_rate}fps)...")
+        logger.info(f"Starting render job {job_id} ({resolution} @ {frame_rate}fps, LUT={lut_name}, VFX={frei0r_effects})...")
         VideoRenderService._update_job_status(job_id, "RENDERING", 10.0)
 
         out_name = f"vybe_export_{job_id}.{output_format}"
         out_file = settings.VIDEO_EXPORTS_DIR / out_name
         w, h = VideoRenderService.RESOLUTIONS.get(resolution, (1920, 1080))
+
+        # Build professional FFmpeg filterchain: Scale + Pad + 3D LUT (.cube) + Frei0r VFX
+        vf_filters = [
+            f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2"
+        ]
+
+        if lut_name and lut_name != "clean":
+            lut_file = settings.LUTS_DIR / f"{lut_name}.cube"
+            if lut_file.exists():
+                vf_filters.append(f"lut3d=file='{lut_file}'")
+
+        if frei0r_effects:
+            for fx in frei0r_effects:
+                vf_filters.append(f"frei0r=filter_name={fx}")
+
+        vf_filters.append("format=yuv420p")
+        vf_chain = ",".join(vf_filters)
 
         try:
             await asyncio.sleep(0.5)
@@ -180,7 +199,7 @@ class VideoRenderService:
                 cmd = [
                     "ffmpeg", "-y",
                     "-i", src,
-                    "-vf", f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+                    "-vf", vf_chain,
                     "-r", str(int(frame_rate)),
                     "-c:v", "libx264",
                     "-preset", "veryfast",
@@ -196,7 +215,13 @@ class VideoRenderService:
                     "ffmpeg", "-y",
                     "-f", "lavfi", "-i", f"testsrc=duration=6:size={w}x{h}:rate={int(frame_rate)}",
                     "-f", "lavfi", "-i", "sine=frequency=440:duration=6",
+                    "-vf", vf_chain,
                     "-c:v", "libx264",
+                    "-preset", "veryfast",
+                    "-c:a", "aac",
+                    "-b:a", "192k",
+                    str(out_file)
+                ]
                     "-preset", "veryfast",
                     "-pix_fmt", "yuv420p",
                     "-c:a", "aac",
