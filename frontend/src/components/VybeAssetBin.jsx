@@ -153,6 +153,16 @@ export default function VybeAssetBin({
 
             {/* Actions */}
             <div className="flex items-center space-x-1.5 pt-1 border-t border-slate-800/80">
+              {a.media_type === 'video' && (
+                <button
+                  onClick={() => onOpenUplift && onOpenUplift(a)}
+                  title="Autonomous Video Uplift & AI Edit (HITL)"
+                  className="px-2 py-1 rounded bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-[10px] font-mono font-bold flex items-center space-x-1 shadow transition"
+                >
+                  <Wand2 className="w-3 h-3" />
+                  <span>UPLIFT</span>
+                </button>
+              )}
               <button
                 onClick={() => onSelectForPreview && onSelectForPreview(a)}
                 title="Preview in Program Monitor"
