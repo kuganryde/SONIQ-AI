@@ -435,6 +435,7 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
                 onSelectForPreview={(asset) => {
                   setActiveVideoUrl(asset.proxy_stream_url || asset.stream_url);
                 }}
+                onOpenUplift={handleOpenUplift}
               />
             )}
 
