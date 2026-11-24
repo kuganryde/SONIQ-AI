@@ -218,7 +218,97 @@ export default function VybeMotionStudio({
         </div>
       )}
 
-      {/* Tab 3: Kinetic Titles & Overlays */}
+      {/* Tab 3: Transitions & MLT Multi-Track Compositor */}
+      {activeTab === 'transitions' && (
+        <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 space-y-3 overflow-y-auto max-h-[360px]">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-800">
+            <div className="flex items-center space-x-1.5">
+              <Layers className="w-4 h-4 text-amber-400" />
+              <span className="text-xs font-bold text-slate-200 uppercase font-mono">
+                MLT Transition Engine (14+ Styles)
+              </span>
+            </div>
+            <span className="text-[10px] font-mono text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/80 font-bold">
+              melt 7.22.0
+            </span>
+          </div>
+
+          {/* Transition Duration Slider */}
+          <div className="bg-black/40 border border-slate-800 p-2 rounded-lg flex items-center justify-between text-xs font-mono">
+            <span className="text-slate-400">Duration:</span>
+            <div className="flex items-center space-x-2">
+              <input
+                type="range"
+                min="0.2"
+                max="2.0"
+                step="0.1"
+                value={transitionDuration}
+                onChange={(e) => onChangeTransitionDuration && onChangeTransitionDuration(parseFloat(e.target.value))}
+                className="w-24 accent-amber-500 cursor-pointer"
+              />
+              <span className="text-amber-400 font-bold w-10 text-right">{transitionDuration.toFixed(2)}s</span>
+            </div>
+          </div>
+
+          {/* Transitions Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+            {transitions.map((t) => {
+              const isSelected = selectedTransition === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => onSelectTransition && onSelectTransition(t.id)}
+                  className={`p-2 rounded-lg border text-left text-xs transition flex flex-col justify-between ${
+                    isSelected
+                      ? 'bg-amber-950/60 border-amber-500 shadow-md shadow-amber-500/10'
+                      : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm">{t.icon}</span>
+                    <span className="px-1 py-0.2 rounded bg-slate-800 text-[8px] font-mono text-slate-400 uppercase">
+                      {t.cat}
+                    </span>
+                  </div>
+                  <div className={`font-mono text-[11px] font-bold ${isSelected ? 'text-amber-300' : 'text-slate-300'}`}>
+                    {t.name}
+                  </div>
+                  <div className="text-[9px] text-slate-500 truncate mt-0.5">{t.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Multi-Track Compositing / PIP Mode */}
+          <div className="pt-2 border-t border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono text-slate-400 font-bold uppercase">
+                Multi-Layer Alpha Compositor (PIP):
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
+              {compositingModes.map((cm) => {
+                const isMode = pipMode === cm.id;
+                return (
+                  <button
+                    key={cm.id}
+                    onClick={() => onSelectPipMode && onSelectPipMode(cm.id)}
+                    className={`p-1.5 rounded-lg border text-center font-mono text-[10px] transition ${
+                      isMode
+                        ? 'bg-cyan-950/80 border-cyan-500 text-cyan-300 font-bold'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <div>{cm.name}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Kinetic Titles & Overlays */}
       {activeTab === 'titles' && (
         <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 space-y-2.5 overflow-y-auto max-h-[360px]">
           <div className="flex items-center space-x-2 pb-1 border-b border-slate-800">
