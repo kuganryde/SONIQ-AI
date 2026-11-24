@@ -90,3 +90,50 @@ def test_video_render_pipeline():
     get_job_res = client.get(f"/api/v1/render/jobs/{job_id}")
     assert get_job_res.status_code == 200
     assert get_job_res.json()["id"] == job_id
+
+
+def test_auto_uplift_pipeline():
+    # 1. Fetch demo asset
+    demo_res = client.get("/api/v1/projects/demo/vybe")
+    assert demo_res.status_code == 200
+    assets = demo_res.json().get("assets", [])
+    assert len(assets) > 0
+    asset_id = assets[0]["id"]
+
+    # 2. Analyze & Propose (HITL Proposal)
+    analyze_payload = {
+        "asset_id": asset_id,
+        "pacing": "fast",
+        "target_aspect_ratio": "9:16",
+        "style_preset": "cyberpunk"
+    }
+    analyze_res = client.post("/api/v1/video/auto-uplift/analyze", json=analyze_payload)
+    assert analyze_res.status_code == 200
+    proposal = analyze_res.json()
+    assert "cuts" in proposal
+    assert len(proposal["cuts"]) >= 2
+    assert "captions" in proposal
+    assert len(proposal["captions"]) >= 2
+    assert "effects" in proposal
+    assert proposal["effects"]["lut"] == "cyberpunk"
+    assert proposal["target_aspect_ratio"] == "9:16"
+
+    # 3. Apply Approved Uplift to Timeline
+    apply_payload = {
+        "project_id": "proj_vybe_demo",
+        "asset_id": asset_id,
+        "approved_cuts": proposal["cuts"],
+        "approved_captions": proposal["captions"],
+        "color_grade": "teal_orange",
+        "aspect_ratio": "9:16",
+        "hook_title": "⚡ TEST UPLIFT HOOK",
+        "include_bgm": True
+    }
+    apply_res = client.post("/api/v1/video/auto-uplift/apply", json=apply_payload)
+    assert apply_res.status_code == 200
+    timeline = apply_res.json()
+    assert timeline["status"] == "uplift_applied"
+    assert len(timeline["video_clips"]) >= 2
+    assert len(timeline["overlay_clips"]) >= 2
+    assert timeline["aspect_ratio"] == "9:16"
+    assert timeline["color_grade"] == "teal_orange"
