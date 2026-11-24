@@ -1154,6 +1154,8 @@ class RenderVideoRequest(BaseModel):
     resolution: str = "1080p"
     frame_rate: float = 30.0
     clips: List[Dict[str, Any]] = []
+    lut_name: Optional[str] = None
+    frei0r_effects: List[str] = []
 
 
 @app.get("/api/v1/projects")
