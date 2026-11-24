@@ -16,12 +16,20 @@ import {
   Info,
   X,
   CheckCircle2,
-  Share2
+  Share2,
+  Film,
+  Video
 } from 'lucide-react';
 import { audioEngine } from '../audio/WebAudioEngine';
 import { apiUrl } from '../config/api';
 
-export default function Navbar({ activeTab, setActiveTab, isPlaying }) {
+export default function Navbar({ 
+  activeTab, 
+  setActiveTab, 
+  isPlaying, 
+  workspaceMode = 'vybe', 
+  setWorkspaceMode 
+}) {
   const [isSoundLogoPlaying, setIsSoundLogoPlaying] = useState(false);
   const [showBrandModal, setShowBrandModal] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
