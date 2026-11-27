@@ -27,22 +27,23 @@ class VideoRenderService:
     RESOLUTIONS = {
         "1080p": (1920, 1080),
         "720p": (1280, 720),
+        "2k": (2560, 1440),
         "4k": (3840, 2160),
         "9:16": (1080, 1920),
         "1:1": (1080, 1080),
         "4:5": (1080, 1350)
     }
 
-    RENDER_SUBPROCESS_TIMEOUT_SEC: float = 600.0
+    RENDER_SUBPROCESS_TIMEOUT_SEC: float = 900.0
     _active_tasks: Dict[str, asyncio.Task] = {}
     _job_heartbeats: Dict[str, float] = {}
 
     @staticmethod
     def create_job(
         project_id: str,
-        profile_name: str = "Web 1080p H.264",
+        profile_name: str = "Cinema HQ H.264",
         output_format: str = "mp4",
-        resolution: str = "1080p",
+        resolution: str = "2k",
         frame_rate: float = 30.0,
         timeline_clips: Optional[List[Dict[str, Any]]] = None,
         lut_name: Optional[str] = None,
@@ -51,7 +52,13 @@ class VideoRenderService:
         transition_duration: float = 0.75,
         engine: str = "auto",
         pip_mode: Optional[str] = None,
-        pip_scale: float = 0.28
+        pip_scale: float = 0.28,
+        playback_speed: float = 1.0,
+        video_restore: bool = True,
+        cinema_finish: bool = True,
+        audio_restore: bool = True,
+        audio_surround_51: bool = True,
+        quality_preset: str = "cinema_hq"
     ) -> Dict[str, Any]:
         """Creates a new render job in QUEUED status."""
         job_id = f"job_{uuid.uuid4().hex[:10]}"
@@ -85,7 +92,13 @@ class VideoRenderService:
                     transition_duration=transition_duration,
                     engine=engine,
                     pip_mode=pip_mode,
-                    pip_scale=pip_scale
+                    pip_scale=pip_scale,
+                    playback_speed=playback_speed,
+                    video_restore=video_restore,
+                    cinema_finish=cinema_finish,
+                    audio_restore=audio_restore,
+                    audio_surround_51=audio_surround_51,
+                    quality_preset=quality_preset
                 )
             )
             VideoRenderService._active_tasks[job_id] = task
@@ -238,6 +251,140 @@ class VideoRenderService:
         return healed_ids
 
     @staticmethod
+    def _probe_has_audio(file_path: str) -> bool:
+        try:
+            res = subprocess.run(
+                [
+                    "ffprobe", "-v", "error", "-select_streams", "a:0",
+                    "-show_entries", "stream=codec_type", "-of", "csv=p=0",
+                    str(file_path),
+                ],
+                capture_output=True, text=True, timeout=10
+            )
+            return "audio" in (res.stdout or "")
+        except Exception:
+            return False
+
+    @staticmethod
+    async def _prepare_restored_audio(
+        valid_clips: List[Dict[str, Any]],
+        playback_speed: float,
+        audio_restore: bool,
+        audio_surround_51: bool,
+        work_dir: Path,
+    ) -> Optional[Path]:
+        """
+        Extracts timeline audio (honoring clip trims & speed), runs DeepFilterNet3 neural
+        restoration when enabled, and masters to EBU R128 + true 5.1 Surround (or stereo).
+        """
+        clip_wavs: List[Path] = []
+        speed = max(0.5, min(2.0, float(playback_speed or 1.0)))
+
+        for idx, c in enumerate(valid_clips):
+            src = c.get("file_path") or c.get("path")
+            if not src or not Path(src).exists():
+                continue
+            has_aud = VideoRenderService._probe_has_audio(src)
+            seg_wav = work_dir / f"seg_{idx}.wav"
+            trim_in = float(c.get("source_in") or 0.0)
+            clip_dur = c.get("duration")
+
+            if has_aud:
+                cmd = ["ffmpeg", "-y"]
+                if trim_in > 0:
+                    cmd.extend(["-ss", f"{trim_in:.3f}"])
+                cmd.extend(["-i", str(src)])
+                if clip_dur and float(clip_dur) > 0:
+                    cmd.extend(["-t", f"{float(clip_dur):.3f}"])
+                af_parts = []
+                if abs(speed - 1.0) > 0.01:
+                    af_parts.append(f"atempo={speed:.3f}")
+                if af_parts:
+                    cmd.extend(["-af", ",".join(af_parts)])
+                cmd.extend(["-vn", "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le", str(seg_wav)])
+            else:
+                dur_val = max(1.0, float(clip_dur or 4.0) / speed)
+                cmd = [
+                    "ffmpeg", "-y", "-f", "lavfi",
+                    "-i", f"anullsrc=r=48000:cl=stereo:d={dur_val:.3f}",
+                    "-c:a", "pcm_s16le", str(seg_wav)
+                ]
+
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=120.0)
+            if proc.returncode == 0 and seg_wav.exists():
+                clip_wavs.append(seg_wav)
+
+        if not clip_wavs:
+            return None
+
+        # Concatenate audio segments into unified 48kHz 16-bit WAV
+        if len(clip_wavs) == 1:
+            merged_wav = clip_wavs[0]
+        else:
+            concat_list = work_dir / "audio_concat.txt"
+            concat_list.write_text(
+                "\n".join(f"file '{p.as_posix()}'" for p in clip_wavs), encoding="utf-8"
+            )
+            merged_wav = work_dir / "merged_audio.wav"
+            proc = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list),
+                "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le", str(merged_wav),
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=120.0)
+            if proc.returncode != 0 or not merged_wav.exists():
+                merged_wav = clip_wavs[0]
+
+        # Step 1: DeepFilterNet3 Neural Audio Restoration
+        restored_wav = merged_wav
+        df_bin = shutil.which("deep-filter") or ("/usr/local/bin/deep-filter" if Path("/usr/local/bin/deep-filter").exists() else None)
+        if audio_restore and df_bin:
+            df_out_dir = work_dir / "df_out"
+            df_out_dir.mkdir(exist_ok=True)
+            proc = await asyncio.create_subprocess_exec(
+                df_bin, str(merged_wav), "-o", str(df_out_dir),
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            try:
+                await asyncio.wait_for(proc.communicate(), timeout=120.0)
+                candidate = df_out_dir / merged_wav.name
+                if proc.returncode == 0 and candidate.exists():
+                    restored_wav = candidate
+                    logger.info(f"DeepFilterNet3 neural audio restoration applied: {candidate}")
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except Exception:
+                    pass
+                logger.warning("DeepFilterNet3 timed out during video render; continuing with raw audio.")
+
+        # Step 2: EBU R128 Loudness Mastering + True 5.1 Surround Upmix
+        master_audio = work_dir / "master_audio.m4a"
+        af_chain = ["loudnorm=I=-14:TP=-1.0:LRA=11"]
+        if audio_surround_51:
+            af_chain.append("surround=chl_out=5.1:level_in=1:level_out=1:lfe=1:lfe_low=128:lfe_high=256")
+            ac_args = ["-ac", "6", "-c:a", "aac", "-b:a", "384k", "-ar", "48000"]
+        else:
+            ac_args = ["-ac", "2", "-c:a", "aac", "-b:a", "256k", "-ar", "48000"]
+
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-i", str(restored_wav),
+            "-af", ",".join(af_chain),
+            *ac_args,
+            str(master_audio),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=180.0)
+        if proc.returncode == 0 and master_audio.exists():
+            return master_audio
+        logger.warning(f"Audio mastering step warning: {stderr.decode(errors='ignore')[-300:]}")
+        return restored_wav
+
+    @staticmethod
     async def _render_worker(
         job_id: str,
         project_id: str,
@@ -251,22 +398,31 @@ class VideoRenderService:
         transition_duration: float = 0.75,
         engine: str = "auto",
         pip_mode: Optional[str] = None,
-        pip_scale: float = 0.28
+        pip_scale: float = 0.28,
+        playback_speed: float = 1.0,
+        video_restore: bool = True,
+        cinema_finish: bool = True,
+        audio_restore: bool = True,
+        audio_surround_51: bool = True,
+        quality_preset: str = "cinema_hq"
     ):
-        """Asynchronous worker that builds and runs the MLT / FFmpeg rendering pipeline."""
+        """Asynchronous worker that builds and runs the Cinema 2K/4K + 5.1 Surround rendering pipeline."""
         logger.info(
-            f"Starting render job {job_id} ({resolution} @ {frame_rate}fps, "
-            f"LUT={lut_name}, VFX={frei0r_effects}, Transition={transition_style}, Engine={engine})..."
+            f"Starting render job {job_id} ({resolution} @ {frame_rate}fps, speed={playback_speed}x, "
+            f"LUT={lut_name}, VFX={frei0r_effects}, Transition={transition_style}, "
+            f"restore_v={video_restore}, cinema={cinema_finish}, restore_a={audio_restore}, 5.1={audio_surround_51}, "
+            f"quality={quality_preset})..."
         )
         VideoRenderService._update_job_status(job_id, "RENDERING", 10.0)
 
         out_name = f"vybe_export_{job_id}.{output_format}"
         out_file = settings.VIDEO_EXPORTS_DIR / out_name
-        w, h = VideoRenderService.RESOLUTIONS.get(resolution, (1920, 1080))
+        w, h = VideoRenderService.RESOLUTIONS.get(resolution, (2560, 1440))
+        speed = max(0.5, min(2.0, float(playback_speed or 1.0)))
 
         try:
-            await asyncio.sleep(0.3)
-            VideoRenderService._update_job_status(job_id, "RENDERING", 25.0)
+            await asyncio.sleep(0.2)
+            VideoRenderService._update_job_status(job_id, "RENDERING", 20.0)
 
             # Determine input source clips
             valid_clips = []
@@ -299,7 +455,7 @@ class VideoRenderService:
             mlt_path.write_text(mlt_xml, encoding="utf-8")
             logger.info(f"Saved OpenShot/MLT XML: {mlt_path}")
 
-            # Option A: MLT Framework Engine ('melt')
+            # Option A: MLT Framework Engine ('melt') when explicitly requested
             if engine == "mlt":
                 VideoRenderService._update_job_status(job_id, "RENDERING", 50.0)
                 mlt_ok = await MLTTransitionService.render_with_mlt(
@@ -317,129 +473,174 @@ class VideoRenderService:
                     return
                 logger.warning(f"MLT render for {job_id} failed or unavailable; falling back to FFmpeg engine.")
 
-            # Option B: High-Performance FFmpeg Complex Filtergraph
-            # Build professional video filterchain: Scale + Pad + 3D LUT (.cube) + Frei0r VFX
-            vf_filters = [
-                f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2"
-            ]
+            # Option B: Cinema FFmpeg Pipeline (Lanczos 2K/4K + Restoration + LUT/VFX + DeepFilterNet3 + 5.1 Surround)
+            with tempfile.TemporaryDirectory(prefix=f"vybe_render_{job_id}_") as tmp_str:
+                work_dir = Path(tmp_str)
 
-            if lut_name and lut_name != "clean":
-                lut_file = settings.LUTS_DIR / f"{lut_name}.cube"
-                if lut_file.exists():
-                    vf_filters.append(f"lut3d=file='{lut_file}'")
+                # Step 1: Prepare restored + 5.1 surround mastered audio track
+                VideoRenderService._update_job_status(job_id, "RENDERING", 35.0)
+                master_audio_path: Optional[Path] = None
+                if valid_clips:
+                    master_audio_path = await VideoRenderService._prepare_restored_audio(
+                        valid_clips=valid_clips,
+                        playback_speed=speed,
+                        audio_restore=audio_restore,
+                        audio_surround_51=audio_surround_51,
+                        work_dir=work_dir,
+                    )
 
-            if frei0r_effects:
-                for fx in frei0r_effects:
-                    parts = fx.split(":", 1)
-                    plugin_name = parts[0].strip()
-                    if plugin_name == "vignette0r":
-                        plugin_name = "vignette"
-                    if len(parts) > 1:
-                        param_val = parts[1].strip()
-                        vf_filters.append(f"frei0r=filter_name={plugin_name}:filter_params={param_val}")
+                # Build post-processing cinema video filterchain
+                post_filters: List[str] = []
+                if abs(speed - 1.0) > 0.01:
+                    post_filters.append(f"setpts=PTS/{speed:.4f}")
+                if video_restore:
+                    # Temporal/spatial 3D denoising + adaptive detail recovery
+                    post_filters.append("hqdn3d=1.8:1.4:4.5:3.5")
+                    post_filters.append("unsharp=5:5:0.75:5:5:0.25")
+                if cinema_finish:
+                    post_filters.append("eq=contrast=1.06:saturation=1.08:gamma=0.98")
+                if lut_name and lut_name != "clean":
+                    lut_file = settings.LUTS_DIR / f"{lut_name}.cube"
+                    if lut_file.exists():
+                        post_filters.append(f"lut3d=file='{lut_file}'")
+                if frei0r_effects:
+                    for fx in frei0r_effects:
+                        parts = fx.split(":", 1)
+                        plugin_name = parts[0].strip()
+                        if plugin_name in ("vignette", "vignette0r"):
+                            post_filters.append("vignette=PI/5")
+                        elif len(parts) > 1:
+                            param_val = parts[1].strip()
+                            post_filters.append(f"frei0r=filter_name={plugin_name}:filter_params={param_val}")
+                        else:
+                            post_filters.append(f"frei0r=filter_name={plugin_name}")
+                elif cinema_finish:
+                    post_filters.append("vignette=PI/6")
+
+                post_filters.append("format=yuv420p")
+
+                # High-quality encoder flags
+                if quality_preset == "hevc_hq":
+                    vcodec_args = ["-c:v", "libx265", "-preset", "medium", "-crf", "20", "-tag:v", "hvc1", "-movflags", "+faststart"]
+                elif quality_preset == "balanced":
+                    vcodec_args = ["-c:v", "libx264", "-preset", "fast", "-crf", "20", "-profile:v", "high", "-movflags", "+faststart"]
+                else:  # cinema_hq
+                    vcodec_args = ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-profile:v", "high", "-movflags", "+faststart"]
+
+                VideoRenderService._update_job_status(job_id, "RENDERING", 60.0)
+
+                if len(valid_clips) >= 2:
+                    # Multi-clip timeline with xfade transitions + cinema finish + mastered 5.1 audio
+                    in_args, fc_str, _ = MLTTransitionService.build_ffmpeg_xfade_pipeline(
+                        clips=valid_clips,
+                        width=w,
+                        height=h,
+                        frame_rate=frame_rate,
+                        transition_style=transition_style or "dissolve",
+                        transition_duration=transition_duration,
+                        lut_name=None,
+                        frei0r_effects=[],
+                        pip_mode=pip_mode,
+                        pip_scale=pip_scale,
+                        luts_dir=settings.LUTS_DIR
+                    )
+                    # Upgrade scale to Lanczos and append restoration + cinema finish to [v_master_out]
+                    fc_str = fc_str.replace(
+                        f"scale={w}:{h}:force_original_aspect_ratio=decrease",
+                        f"scale={w}:{h}:flags=lanczos+accurate_rnd+full_chroma_int:force_original_aspect_ratio=decrease"
+                    )
+                    fc_str = f"{fc_str};[v_master_out]{','.join(post_filters)}[v_cinema_out]"
+
+                    cmd = ["ffmpeg", "-y", *in_args]
+                    audio_input_idx = len(valid_clips)
+                    if master_audio_path and master_audio_path.exists():
+                        cmd.extend(["-i", str(master_audio_path)])
+                        cmd.extend(["-filter_complex", fc_str, "-map", "[v_cinema_out]", "-map", f"{audio_input_idx}:a:0"])
+                        cmd.extend(["-c:a", "copy", "-shortest"])
                     else:
-                        vf_filters.append(f"frei0r=filter_name={plugin_name}")
+                        cmd.extend(["-filter_complex", fc_str, "-map", "[v_cinema_out]"])
+                    cmd.extend(["-r", str(int(frame_rate)), *vcodec_args, str(out_file)])
 
-            vf_filters.append("format=yuv420p")
-            vf_chain = ",".join(vf_filters)
+                elif len(valid_clips) == 1:
+                    c0 = valid_clips[0]
+                    src = c0.get("file_path") or c0.get("path")
+                    trim_in = float(c0.get("source_in") or 0.0)
+                    clip_dur = c0.get("duration")
 
-            if len(valid_clips) >= 2:
-                # Multi-clip timeline with programmatic xfade transitions & audio acrossfade
-                in_args, fc_str, af_str = MLTTransitionService.build_ffmpeg_xfade_pipeline(
-                    clips=valid_clips,
-                    width=w,
-                    height=h,
-                    frame_rate=frame_rate,
-                    transition_style=transition_style or "dissolve",
-                    transition_duration=transition_duration,
-                    lut_name=lut_name,
-                    frei0r_effects=frei0r_effects,
-                    pip_mode=pip_mode,
-                    pip_scale=pip_scale,
-                    luts_dir=settings.LUTS_DIR
+                    vf_chain = ",".join([
+                        f"scale={w}:{h}:flags=lanczos+accurate_rnd+full_chroma_int:force_original_aspect_ratio=decrease",
+                        f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2",
+                        *post_filters,
+                    ])
+
+                    cmd = ["ffmpeg", "-y"]
+                    if trim_in > 0:
+                        cmd.extend(["-ss", f"{trim_in:.3f}"])
+                    cmd.extend(["-i", str(src)])
+                    if clip_dur and float(clip_dur) > 0:
+                        cmd.extend(["-t", f"{float(clip_dur):.3f}"])
+
+                    if master_audio_path and master_audio_path.exists():
+                        cmd.extend(["-i", str(master_audio_path)])
+                        cmd.extend(["-vf", vf_chain, "-map", "0:v:0", "-map", "1:a:0", "-c:a", "copy", "-shortest"])
+                    else:
+                        cmd.extend(["-vf", vf_chain, "-an"])
+                    cmd.extend(["-r", str(int(frame_rate)), *vcodec_args, str(out_file)])
+
+                else:
+                    vf_chain = ",".join([
+                        f"scale={w}:{h}:flags=lanczos+accurate_rnd+full_chroma_int:force_original_aspect_ratio=decrease",
+                        f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2",
+                        *post_filters,
+                    ])
+                    cmd = [
+                        "ffmpeg", "-y",
+                        "-f", "lavfi", "-i", f"testsrc=duration=6:size={w}x{h}:rate={int(frame_rate)}",
+                        "-f", "lavfi", "-i", "sine=frequency=440:duration=6",
+                        "-vf", vf_chain,
+                        *vcodec_args,
+                        "-c:a", "aac", "-b:a", "384k", "-ac", "6" if audio_surround_51 else "2",
+                        str(out_file)
+                    ]
+
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
                 )
-
-                cmd = [
-                    "ffmpeg", "-y",
-                    *in_args,
-                    "-filter_complex", fc_str,
-                    "-map", "[v_master_out]",
-                    "-r", str(int(frame_rate)),
-                    "-c:v", "libx264",
-                    "-preset", "veryfast",
-                    "-crf", "22",
-                    str(out_file)
-                ]
-            elif len(valid_clips) == 1:
-                # Single clip transcode & grade
-                src = valid_clips[0].get("file_path") or valid_clips[0].get("path")
-                cmd = [
-                    "ffmpeg", "-y",
-                    "-i", src,
-                    "-vf", vf_chain,
-                    "-r", str(int(frame_rate)),
-                    "-c:v", "libx264",
-                    "-preset", "veryfast",
-                    "-crf", "22",
-                    "-c:a", "aac",
-                    "-b:a", "192k",
-                    "-ar", "48000",
-                    str(out_file)
-                ]
-            else:
-                # Synthesize high-definition test sequence if no assets available
-                cmd = [
-                    "ffmpeg", "-y",
-                    "-f", "lavfi", "-i", f"testsrc=duration=6:size={w}x{h}:rate={int(frame_rate)}",
-                    "-f", "lavfi", "-i", "sine=frequency=440:duration=6",
-                    "-vf", vf_chain,
-                    "-c:v", "libx264",
-                    "-preset", "veryfast",
-                    "-c:a", "aac",
-                    "-b:a", "192k",
-                    str(out_file)
-                ]
-
-            VideoRenderService._update_job_status(job_id, "RENDERING", 65.0)
-
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=VideoRenderService.RENDER_SUBPROCESS_TIMEOUT_SEC
-                )
-            except asyncio.TimeoutError:
                 try:
-                    proc.kill()
-                    await proc.wait()
-                except Exception:
-                    pass
-                err_text = f"Render subprocess timed out after {int(VideoRenderService.RENDER_SUBPROCESS_TIMEOUT_SEC)}s and was auto-terminated."
-                logger.error(f"Render job {job_id} timed out: {err_text}")
-                VideoRenderService._update_job_status(job_id, "FAILED", 0.0, error_msg=err_text)
-                return
+                    stdout, stderr = await asyncio.wait_for(
+                        proc.communicate(),
+                        timeout=VideoRenderService.RENDER_SUBPROCESS_TIMEOUT_SEC
+                    )
+                except asyncio.TimeoutError:
+                    try:
+                        proc.kill()
+                        await proc.wait()
+                    except Exception:
+                        pass
+                    err_text = f"Render subprocess timed out after {int(VideoRenderService.RENDER_SUBPROCESS_TIMEOUT_SEC)}s and was auto-terminated."
+                    logger.error(f"Render job {job_id} timed out: {err_text}")
+                    VideoRenderService._update_job_status(job_id, "FAILED", 0.0, error_msg=err_text)
+                    return
 
-            if proc.returncode != 0:
-                err_text = stderr.decode(errors="ignore")[-800:]
-                logger.error(f"Render job {job_id} failed: {err_text}")
-                VideoRenderService._update_job_status(job_id, "FAILED", 0.0, error_msg=err_text)
-                return
+                if proc.returncode != 0:
+                    err_text = stderr.decode(errors="ignore")[-800:]
+                    logger.error(f"Render job {job_id} failed: {err_text}")
+                    VideoRenderService._update_job_status(job_id, "FAILED", 0.0, error_msg=err_text)
+                    return
 
-            VideoRenderService._update_job_status(job_id, "RENDERING", 90.0)
-            await asyncio.sleep(0.3)
+                VideoRenderService._update_job_status(job_id, "RENDERING", 95.0)
+                await asyncio.sleep(0.2)
 
-            # Finished
-            VideoRenderService._update_job_status(
-                job_id,
-                "COMPLETED",
-                100.0,
-                output_path=str(out_file)
-            )
-            logger.info(f"Render job {job_id} successfully completed: {out_file}")
+                # Finished
+                VideoRenderService._update_job_status(
+                    job_id,
+                    "COMPLETED",
+                    100.0,
+                    output_path=str(out_file)
+                )
+                logger.info(f"Render job {job_id} successfully completed: {out_file}")
 
         except asyncio.CancelledError:
             logger.warning(f"Render job {job_id} cancelled by auto-heal watchdog.")
