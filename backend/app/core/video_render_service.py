@@ -4,8 +4,9 @@ import logging
 import os
 import shutil
 import subprocess
+import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -30,6 +31,10 @@ class VideoRenderService:
         "1:1": (1080, 1080),
         "4:5": (1080, 1350)
     }
+
+    RENDER_SUBPROCESS_TIMEOUT_SEC: float = 600.0
+    _active_tasks: Dict[str, asyncio.Task] = {}
+    _job_heartbeats: Dict[str, float] = {}
 
     @staticmethod
     def create_job(
@@ -64,8 +69,8 @@ class VideoRenderService:
                     (job_id, project_id, profile_name, output_format, resolution, frame_rate, now)
                 )
             
-            # Start background asynchronous render
-            asyncio.create_task(
+            # Start background asynchronous render and register for watchdog tracking
+            task = asyncio.create_task(
                 VideoRenderService._render_worker(
                     job_id=job_id,
                     project_id=project_id,
@@ -82,6 +87,8 @@ class VideoRenderService:
                     pip_scale=pip_scale
                 )
             )
+            VideoRenderService._active_tasks[job_id] = task
+            VideoRenderService._job_heartbeats[job_id] = time.time()
             return VideoRenderService.get_job(job_id)
         finally:
             conn.close()
@@ -140,6 +147,7 @@ class VideoRenderService:
         output_path: Optional[str] = None,
         error_msg: Optional[str] = None
     ):
+        VideoRenderService._job_heartbeats[job_id] = time.time()
         now = datetime.now(timezone.utc).isoformat() if status in ["COMPLETED", "FAILED"] else None
         conn = get_connection()
         try:
@@ -155,6 +163,78 @@ class VideoRenderService:
                 )
         finally:
             conn.close()
+
+    @classmethod
+    def recover_stale_jobs(cls, startup: bool = False, max_stale_minutes: int = 15) -> List[str]:
+        """
+        Auto-heals orphaned or hung render jobs so they never stay stuck in QUEUED/RENDERING.
+        - startup=True: Marks all in-progress jobs from prior process lifecycles as FAILED.
+        - startup=False: Marks jobs without an active worker task or exceeding max_stale_minutes as FAILED.
+        """
+        healed_ids: List[str] = []
+        now_utc = datetime.now(timezone.utc)
+        now_iso = now_utc.isoformat()
+        stale_cutoff_dt = now_utc - timedelta(minutes=max_stale_minutes)
+        now_ts = time.time()
+
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, status, progress_percent, created_at FROM render_jobs WHERE status IN ('QUEUED', 'RENDERING')"
+            )
+            rows = cur.fetchall()
+            for row in rows:
+                job_id = row["id"]
+                created_raw = row["created_at"]
+                should_heal = False
+                reason = ""
+
+                if startup:
+                    should_heal = True
+                    reason = "Auto-healed on startup: orphaned render job from previous server process."
+                else:
+                    task = cls._active_tasks.get(job_id)
+                    last_hb = cls._job_heartbeats.get(job_id)
+                    if task is None or task.done():
+                        # No live worker task in this process — check grace window of 60s from creation
+                        try:
+                            created_dt = datetime.fromisoformat(created_raw)
+                            if created_dt.tzinfo is None:
+                                created_dt = created_dt.replace(tzinfo=timezone.utc)
+                        except Exception:
+                            created_dt = stale_cutoff_dt
+                        if (now_utc - created_dt).total_seconds() > 60:
+                            should_heal = True
+                            reason = "Auto-healed by watchdog: no active worker process for job."
+                    elif last_hb is not None and (now_ts - last_hb) > (max_stale_minutes * 60):
+                        should_heal = True
+                        reason = f"Auto-healed by watchdog: no progress for >{max_stale_minutes} minutes."
+                        try:
+                            task.cancel()
+                        except Exception:
+                            pass
+
+                if should_heal:
+                    with conn:
+                        conn.execute(
+                            """
+                            UPDATE render_jobs
+                            SET status = 'FAILED',
+                                error_message = ?,
+                                completed_at = COALESCE(completed_at, ?)
+                            WHERE id = ? AND status IN ('QUEUED', 'RENDERING')
+                            """,
+                            (reason, now_iso, job_id)
+                        )
+                    cls._active_tasks.pop(job_id, None)
+                    cls._job_heartbeats.pop(job_id, None)
+                    healed_ids.append(job_id)
+                    logger.warning(f"Auto-healed stale render job {job_id}: {reason}")
+        finally:
+            conn.close()
+
+        return healed_ids
 
     @staticmethod
     async def _render_worker(
