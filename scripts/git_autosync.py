@@ -52,10 +52,22 @@ def check_and_sync():
         return
 
     if status_out:
-        # Changes detected!
+        # Changes detected! Stage all non-ignored changes
         run_git(["add", "-A"])
-        
-        # Check staged changes
+
+        # Safety guard: unstage any binary/oversized file (> 20 MB) or backend/storage media artifact
+        code, staged_files, _ = run_git(["diff", "--cached", "--name-only"])
+        if staged_files:
+            blocked_prefixes = ("backend/storage/temp_imports/", "backend/storage/exports/", "backend/storage/video_exports/", "frontend/dist/")
+            for f in [x.strip() for x in staged_files.splitlines() if x.strip()]:
+                fp = REPO_DIR / f
+                if f.startswith(blocked_prefixes) and not f.endswith(".gitkeep"):
+                    run_git(["reset", "HEAD", "--", f])
+                elif fp.exists() and fp.is_file() and fp.stat().st_size > 20 * 1024 * 1024:
+                    print(f"[GUARD] Skipping oversized file (>20MB): {f}", flush=True)
+                    run_git(["reset", "HEAD", "--", f])
+
+        # Re-check staged changes after guard
         code, staged_files, _ = run_git(["diff", "--cached", "--name-only"])
         if staged_files:
             files_list = [f.strip() for f in staged_files.splitlines() if f.strip()]
