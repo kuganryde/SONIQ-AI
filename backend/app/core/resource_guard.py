@@ -201,7 +201,12 @@ class AudioCacheManager:
         """
         pruned_count = 0
         cutoff = time.time() - (max_age_hours * 3600)
-        target_dirs = [storage_dir / "processed", storage_dir / "stems", storage_dir / "synths"]
+        target_dirs = [
+            storage_dir / "processed",
+            storage_dir / "stems",
+            storage_dir / "synths",
+            storage_dir / "temp_imports",
+        ]
 
         for d in target_dirs:
             if not d.exists():

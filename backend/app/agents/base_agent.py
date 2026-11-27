@@ -32,13 +32,14 @@ class BaseAudioAgent(ABC):
             "options": {"temperature": 0.1, "num_predict": 512}
         }
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 res = await client.post(url, json=payload)
                 if res.status_code == 200:
                     data = res.json()
                     return data.get("response", "").strip()
+                logger.warning(f"Local Ollama non-200 ({res.status_code}) for {self.agent_name}")
         except Exception as e:
-            logger.info(f"Local Ollama query fallback for {self.agent_name}: {e}")
+            logger.info(f"Local Ollama query fallback for {self.agent_name}: {type(e).__name__}: {e}")
 
         # Deterministic acoustic fallback response
         return self.get_deterministic_fallback(prompt)
