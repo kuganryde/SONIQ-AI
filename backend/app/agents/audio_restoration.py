@@ -1,5 +1,9 @@
+import asyncio
+import logging
+import shutil
+import tempfile
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 import numpy as np
 import scipy.signal
 
@@ -7,6 +11,9 @@ from app.agents.base_agent import BaseAudioAgent
 from app.config import settings
 from app.core.analysis import AudioAnalyzer
 from app.core.audio_io import AudioIO
+
+logger = logging.getLogger("soniq.restoration")
+DEEPFILTER_BIN = "/usr/local/bin/deep-filter"
 
 
 class AudioRestorationAgent(BaseAudioAgent):
@@ -84,6 +91,70 @@ class AudioRestorationAgent(BaseAudioAgent):
                         out[ch, grp] = np.linspace(out[ch, left], out[ch, right], len(grp))
         return out
 
+    @staticmethod
+    async def denoise_deepfilternet(audio: np.ndarray, sample_rate: int) -> Tuple[np.ndarray, bool]:
+        """
+        Neural speech/audio denoising using local DeepFilterNet3 (v0.5.6) standalone binary.
+        Operates natively at 48 kHz; falls back cleanly if binary is unavailable or fails.
+        """
+        df_bin = shutil.which("deep-filter") or (DEEPFILTER_BIN if Path(DEEPFILTER_BIN).exists() else None)
+        if not df_bin:
+            return audio, False
+
+        target_sr = 48000
+        orig_len = audio.shape[1]
+        work_audio = audio
+        if sample_rate != target_sr:
+            from math import gcd
+            g = gcd(target_sr, sample_rate)
+            work_audio = scipy.signal.resample_poly(audio, target_sr // g, sample_rate // g, axis=1)
+
+        with tempfile.TemporaryDirectory(prefix="soniq_df_") as tmpdir:
+            tmp_path = Path(tmpdir)
+            in_wav = tmp_path / "input.wav"
+            out_dir = tmp_path / "out"
+            out_dir.mkdir(exist_ok=True)
+
+            AudioIO.write_audio(work_audio, in_wav, sample_rate=target_sr, bit_depth="24", format_type="WAV")
+
+            proc = await asyncio.create_subprocess_exec(
+                df_bin,
+                str(in_wav),
+                "-o",
+                str(out_dir),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                _, stderr = await asyncio.wait_for(proc.communicate(), timeout=90.0)
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except Exception:
+                    pass
+                logger.warning("DeepFilterNet3 timed out after 90s; falling back to spectral denoising.")
+                return audio, False
+
+            out_wav = out_dir / "input.wav"
+            if proc.returncode != 0 or not out_wav.exists():
+                logger.warning(f"DeepFilterNet3 failed (rc={proc.returncode}): {stderr.decode(errors='ignore')[:300]}")
+                return audio, False
+
+            cleaned, out_sr = AudioIO.load_audio(str(out_wav))
+            if out_sr != sample_rate:
+                from math import gcd
+                g = gcd(sample_rate, out_sr)
+                cleaned = scipy.signal.resample_poly(cleaned, sample_rate // g, out_sr // g, axis=1)
+
+            # Match original length & channel count
+            if cleaned.shape[1] >= orig_len:
+                cleaned = cleaned[:, :orig_len]
+            else:
+                cleaned = np.pad(cleaned, ((0, 0), (0, orig_len - cleaned.shape[1])))
+
+            return cleaned, True
+
     async def restore_audio(
         self,
         file_path: str,
@@ -95,12 +166,19 @@ class AudioRestorationAgent(BaseAudioAgent):
         pre_metrics = AudioAnalyzer.full_audio_analysis(audio, sr)
 
         processed = np.copy(audio)
+        denoise_engine = "None"
         # 1. De-hum
         if dehum_freq > 0:
             processed = self.remove_mains_hum(processed, sr, freq=dehum_freq)
-        # 2. Spectral noise reduction
+        # 2. Neural DeepFilterNet3 denoising (with spectral fallback)
         if denoise:
-            processed = self.reduce_noise_spectral(processed, sr, reduction_db=10.0)
+            df_audio, used_df = await self.denoise_deepfilternet(processed, sr)
+            if used_df:
+                processed = df_audio
+                denoise_engine = "DeepFilterNet3 (Neural 48kHz)"
+            else:
+                processed = self.reduce_noise_spectral(processed, sr, reduction_db=10.0)
+                denoise_engine = "Spectral Subtraction (Fallback)"
         # 3. De-clip
         if declip:
             processed = self.repair_clipping(processed)
@@ -115,6 +193,7 @@ class AudioRestorationAgent(BaseAudioAgent):
         result = {
             "agent_id": self.agent_id,
             "status": "COMPLETED",
+            "engine": denoise_engine,
             "source_file": file_path,
             "restored_file": str(out_p),
             "download_url": f"/api/v1/audio/download/{out_p.name}",
@@ -126,5 +205,5 @@ class AudioRestorationAgent(BaseAudioAgent):
                 "phase_integrity_preserved": abs(post_metrics["phase_correlation"] - pre_metrics["phase_correlation"]) < 0.1
             }
         }
-        self.log_execution("RESTORE_AUDIO", {"file": file_path}, {"noise_reduction": denoise})
+        self.log_execution("RESTORE_AUDIO", {"file": file_path}, {"noise_reduction": denoise, "engine": denoise_engine})
         return result
