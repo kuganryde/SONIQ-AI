@@ -542,7 +542,7 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
 
             {activePanel === 'render' && (
               <VybeRenderQueue
-                currentResolution="1080p"
+                currentResolution="2k"
                 currentAspectRatio={aspectRatio}
                 timelineClips={videoClips}
                 selectedLut={colorGrade}
@@ -552,6 +552,7 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
                 renderEngine={renderEngine}
                 onSelectRenderEngine={(eng) => setRenderEngine(eng)}
                 pipMode={pipMode}
+                playbackSpeed={playbackSpeed}
               />
             )}
           </div>
