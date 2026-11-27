@@ -345,6 +345,126 @@ async def download_audio(filename: str):
     raise HTTPException(status_code=404, detail="Audio file not found.")
 
 
+def _soniq_audio_dirs() -> Dict[str, Path]:
+    return {
+        "exports": settings.EXPORTS_DIR,
+        "processed": settings.PROCESSED_DIR,
+        "stems": settings.STEMS_DIR,
+        "uploads": settings.UPLOAD_DIR,
+        "synths": settings.SYNTHS_DIR,
+    }
+
+
+def _is_protected_audio_file(filename: str) -> bool:
+    return (
+        filename == ".gitkeep"
+        or filename.startswith("demo_")
+        or filename == "rydetech_soniq_sound_logo.wav"
+    )
+
+
+@app.get("/api/v1/audio/files")
+async def list_soniq_audio_files(category: str = "all"):
+    """Lists SONIQ AI audio files across storage categories with size and delete metadata."""
+    dirs = _soniq_audio_dirs()
+    selected = dirs if category == "all" else {category: dirs[category]} if category in dirs else {}
+    if not selected:
+        raise HTTPException(status_code=400, detail=f"Invalid category '{category}'")
+
+    files: List[Dict[str, Any]] = []
+    total_bytes = 0
+    for cat_name, folder in selected.items():
+        if not folder.exists():
+            continue
+        for item in folder.iterdir():
+            if not item.is_file() or item.name == ".gitkeep":
+                continue
+            try:
+                st = item.stat()
+                total_bytes += st.st_size
+                files.append({
+                    "filename": item.name,
+                    "category": cat_name,
+                    "size_bytes": st.st_size,
+                    "size_mb": round(st.st_size / (1024 * 1024), 2),
+                    "modified_at": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
+                    "download_url": f"/api/v1/audio/download/{item.name}",
+                    "protected": _is_protected_audio_file(item.name),
+                })
+            except Exception:
+                continue
+
+    files.sort(key=lambda x: x["modified_at"], reverse=True)
+    return {
+        "files": files,
+        "total_count": len(files),
+        "total_size_mb": round(total_bytes / (1024 * 1024), 2),
+        "categories": list(dirs.keys()),
+    }
+
+
+@app.delete("/api/v1/audio/files/{category}/{filename}")
+async def delete_soniq_audio_file(category: str, filename: str):
+    """Deletes a single SONIQ AI audio file from the specified category directory."""
+    dirs = _soniq_audio_dirs()
+    if category not in dirs:
+        raise HTTPException(status_code=400, detail=f"Invalid category '{category}'")
+    if _is_protected_audio_file(filename):
+        raise HTTPException(status_code=403, detail="Protected system or demo audio file cannot be deleted.")
+
+    folder = dirs[category].resolve()
+    target = (folder / filename).resolve()
+    if folder not in target.parents or not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+    size_bytes = target.stat().st_size
+    target.unlink()
+    logger.info(f"Deleted SONIQ audio file: {category}/{filename} ({size_bytes} bytes)")
+    return {
+        "deleted": True,
+        "category": category,
+        "filename": filename,
+        "freed_mb": round(size_bytes / (1024 * 1024), 2),
+    }
+
+
+@app.delete("/api/v1/audio/files")
+async def cleanup_soniq_audio_files(category: str = "all", preserve_uploads: bool = False):
+    """Bulk cleans up SONIQ AI audio files while always preserving protected demo/system assets."""
+    dirs = _soniq_audio_dirs()
+    if category == "all":
+        selected = {k: v for k, v in dirs.items() if not (preserve_uploads and k == "uploads")}
+    elif category == "derivatives":
+        selected = {k: dirs[k] for k in ("processed", "stems", "synths")}
+    elif category in dirs:
+        selected = {category: dirs[category]}
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid category '{category}'")
+
+    deleted_count = 0
+    freed_bytes = 0
+    for cat_name, folder in selected.items():
+        if not folder.exists():
+            continue
+        for item in folder.iterdir():
+            if not item.is_file() or _is_protected_audio_file(item.name):
+                continue
+            try:
+                freed_bytes += item.stat().st_size
+                item.unlink()
+                deleted_count += 1
+            except Exception as e:
+                logger.warning(f"Error deleting {cat_name}/{item.name}: {e}")
+
+    logger.info(f"SONIQ audio cleanup ({category}): removed {deleted_count} file(s), freed {round(freed_bytes / (1024 * 1024), 2)} MB")
+    return {
+        "status": "OK",
+        "category": category,
+        "deleted_count": deleted_count,
+        "freed_mb": round(freed_bytes / (1024 * 1024), 2),
+    }
+
+
 @app.post("/api/v1/audio/analyze")
 async def analyze_audio(file_path: str = Form(...)):
     """Agent 01: Deep Acoustic & Technical Inspection with Content-Hashed Caching."""
