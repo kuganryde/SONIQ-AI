@@ -1912,3 +1912,106 @@ async def apply_nle_hitl_decision(req: NLEHitlApplyRequest):
             "playback_speed": max(0.5, min(2.0, req.playback_speed)),
         },
     }
+
+
+# --- SONIQ AI Audio Intelligence Ecosystem (Central Orchestrator + Specialist Agents) ---
+
+class IntelligenceOrchestrateRequest(BaseModel):
+    file_path: str
+    mode: ProductionMode = ProductionMode.AUTO
+    prompt: str = ""
+    project_id: str = "soniq_default"
+    overrides: Dict[str, Any] = Field(default_factory=dict)
+
+
+class CinemaBassRequest(BaseModel):
+    file_path: str
+    preset: str = "STUDIO_BASS"
+    crossover_hz: Optional[float] = None
+    lfe_gain_db: Optional[float] = None
+    sub_gain_db: Optional[float] = None
+    weight_gain_db: Optional[float] = None
+    punch_gain_db: Optional[float] = None
+    mono_bass_lock: bool = True
+    export_lfe_track: bool = True
+
+
+class AudioQARequest(BaseModel):
+    file_path: str
+    original_file_path: Optional[str] = None
+    target_lufs: float = -14.0
+    target_ceiling_dbtp: float = -1.0
+    expected_channels: Optional[int] = None
+
+
+@app.get("/api/v1/intelligence/agents")
+async def get_intelligence_registry():
+    """Returns registered Audio Intelligence agents, production modes, presets, and live hardware status."""
+    return AudioProductionDirector.get_registry_info()
+
+
+@app.get("/api/v1/intelligence/jobs")
+async def list_intelligence_jobs(limit: int = 30):
+    """Lists persisted Audio Intelligence orchestration jobs."""
+    jobs = AudioProductionDirector.list_jobs(limit=limit)
+    return {"jobs": jobs, "total": len(jobs)}
+
+
+@app.post("/api/v1/intelligence/orchestrate")
+async def run_audio_intelligence_orchestration(req: IntelligenceOrchestrateRequest):
+    """Runs the central AudioProductionDirector in AUTO, STUDIO_PRO, CINEMA_X, MASTER_X, or CUSTOM mode."""
+    try:
+        return await audio_director.orchestrate(
+            file_path=req.file_path,
+            mode=req.mode,
+            prompt=req.prompt,
+            project_id=req.project_id,
+            overrides=req.overrides,
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Audio Intelligence orchestration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/intelligence/cinema-bass")
+async def run_cinema_bass_agent(req: CinemaBassRequest):
+    """Standalone Agent 06 (cinema_bass_agent): 4-band sub/bass shaping, harmonic reconstruction, and LFE synthesis."""
+    if not Path(req.file_path).exists():
+        raise HTTPException(status_code=404, detail="Source audio file not found")
+    task = AgentTask(
+        agent_id="cinema_bass_agent",
+        input_file_path=req.file_path,
+        processing_profile=req.preset.upper(),
+        processing_parameters={
+            "crossover_hz": req.crossover_hz,
+            "lfe_gain_db": req.lfe_gain_db,
+            "sub_gain_db": req.sub_gain_db,
+            "weight_gain_db": req.weight_gain_db,
+            "punch_gain_db": req.punch_gain_db,
+            "mono_bass_lock": req.mono_bass_lock,
+            "export_lfe_track": req.export_lfe_track,
+        },
+    )
+    res = await cinema_bass_agent.execute_task(task)
+    return res.model_dump()
+
+
+@app.post("/api/v1/intelligence/qa-audit")
+async def run_audio_qa_agent(req: AudioQARequest):
+    """Standalone Agent 08 (audio_qa_agent): Independent signal-level quality gate verification."""
+    if not Path(req.file_path).exists():
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    task = AgentTask(
+        agent_id="audio_qa_agent",
+        input_file_path=req.file_path,
+        processing_parameters={
+            "original_file_path": req.original_file_path,
+            "target_lufs": req.target_lufs,
+            "target_ceiling_dbtp": req.target_ceiling_dbtp,
+            "expected_channels": req.expected_channels,
+        },
+    )
+    res = await audio_qa_agent.execute_task(task)
+    return res.model_dump()
