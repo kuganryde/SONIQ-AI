@@ -61,7 +61,10 @@ class RateLimiter:
                 self.last_cleanup = now
 
             window_start = now - window_sec
-            q = self.records[ip][tier_name]
+            ip_tiers = self.records[ip]
+            if tier_name not in ip_tiers:
+                ip_tiers[tier_name] = deque()
+            q = ip_tiers[tier_name]
 
             # Remove timestamps outside current sliding window
             while q and q[0] <= window_start:
@@ -81,7 +84,7 @@ class RateLimiter:
         """Removes inactive IPs to prevent memory footprint growth."""
         dead_ips = []
         for ip, tiers in self.records.items():
-            active_tiers = {}
+            active_tiers = defaultdict(deque)
             for t_name, q in tiers.items():
                 while q and q[0] <= now - 120:
                     q.popleft()
