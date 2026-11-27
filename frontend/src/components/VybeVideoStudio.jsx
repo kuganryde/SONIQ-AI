@@ -50,6 +50,7 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
   const [isHITLOpen, setIsHITLOpen] = useState(false);
   const [selectedAssetForUplift, setSelectedAssetForUplift] = useState(null);
   const [showUpliftBanner, setShowUpliftBanner] = useState(true);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
 
   // Load initial demo project and assets
   const loadDemoShowreel = async () => {
@@ -229,6 +230,27 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
     setOverlayClips(prev => prev.filter(c => c.id !== clipId));
   };
 
+  const handleQuickTrimTail = (deltaSec) => {
+    setVideoClips(prev => {
+      if (prev.length === 0) return prev;
+      let idx = prev.findIndex(c => currentTime >= c.start_time && currentTime <= c.start_time + c.duration);
+      if (idx === -1) idx = 0;
+      const copy = [...prev];
+      const target = copy[idx];
+      const nextDur = Math.max(1.0, +(target.duration + deltaSec).toFixed(2));
+      copy[idx] = { ...target, duration: nextDur };
+      return copy;
+    });
+  };
+
+  const handleResetClean = () => {
+    setColorGrade('clean');
+    setActiveFrei0rEffects([]);
+    setSelectedTransition('dissolve');
+    setTransitionDuration(0.6);
+    setPlaybackSpeed(1.0);
+  };
+
   const handleAddTitleOverlay = (titleText) => {
     const newOverlay = {
       id: `overlay_${Date.now()}`,
@@ -337,6 +359,7 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
 
   const tabs = [
     { id: 'assets', label: 'Media Bin', icon: FolderOpen, count: assets.length },
+    { id: 'nle', label: 'NLE Suites', icon: Sliders, badge: 'HITL' },
     { id: 'director', label: 'AI Director', icon: Bot, badge: 'Ollama' },
     { id: 'motion', label: 'Motion VFX', icon: Sparkles },
     { id: 'social', label: 'Social Studio', icon: Smartphone },
@@ -451,6 +474,28 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
               />
             )}
 
+            {activePanel === 'nle' && (
+              <VybeNLESuitePanel
+                activeAsset={assets[0] || null}
+                activeColorGrade={colorGrade}
+                onSelectColorGrade={(g) => setColorGrade(g)}
+                activeFrei0rEffects={activeFrei0rEffects}
+                onToggleFrei0rEffect={handleToggleFrei0rEffect}
+                onSetFrei0rEffects={(effs) => setActiveFrei0rEffects(effs)}
+                selectedTransition={selectedTransition}
+                onSelectTransition={(t) => setSelectedTransition(t)}
+                transitionDuration={transitionDuration}
+                onChangeTransitionDuration={(d) => setTransitionDuration(d)}
+                aspectRatio={aspectRatio}
+                onSelectAspectRatio={(ar) => setAspectRatio(ar)}
+                playbackSpeed={playbackSpeed}
+                onChangePlaybackSpeed={(spd) => setPlaybackSpeed(spd)}
+                onQuickSplit={() => handleSplitClip(currentTime > 0 ? currentTime : (videoClips[0]?.duration || 4) / 2)}
+                onQuickTrimTail={handleQuickTrimTail}
+                onResetClean={handleResetClean}
+              />
+            )}
+
             {activePanel === 'director' && (
               <VybeAIDirector
                 currentAspectRatio={aspectRatio}
@@ -517,6 +562,7 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
             activeOverlayTitle={activeOverlayTitle}
             showSafeZones={showSafeZones}
             onToggleSafeZones={() => setShowSafeZones(!showSafeZones)}
+            playbackSpeed={playbackSpeed}
           />
         </div>
       </div>
