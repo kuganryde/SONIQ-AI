@@ -30,6 +30,7 @@ from app.core.synth_engine import SynthEngine
 from app.core.video_render_service import VideoRenderService
 from app.core.auto_edit_service import AutoEditService
 from app.core.mlt_transition_service import MLTTransitionService
+from app.core.nle_suite_service import NLESuiteService
 from app.agents.production_manager import ProductionManagerAgent
 from app.agents.audio_analyst import AudioAnalystAgent
 from app.agents.stem_separator import StemSeparatorAgent
