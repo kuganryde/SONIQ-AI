@@ -70,6 +70,59 @@ def _ensure_brand_sound_logo(sample_rate: int = 48000, duration_sec: float = 3.2
     return brand_file
 
 
+_auto_heal_state: Dict[str, Any] = {
+    "watchdog_active": False,
+    "interval_seconds": 300,
+    "stale_job_threshold_minutes": 15,
+    "last_sweep_at": None,
+    "total_healed_render_jobs": 0,
+    "last_healed_job_ids": [],
+    "last_pruned_temp_files": 0,
+}
+
+
+def _run_auto_heal_sweep(startup: bool = False) -> Dict[str, Any]:
+    """Executes a synchronous auto-heal pass for stale render jobs and temp storage."""
+    healed_ids = VideoRenderService.recover_stale_jobs(
+        startup=startup,
+        max_stale_minutes=_auto_heal_state["stale_job_threshold_minutes"],
+    )
+    pruned = AudioCacheManager.prune_temporary_storage(settings.STORAGE_DIR, max_age_hours=48)
+    ResourceGuard.clean_memory()
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    _auto_heal_state["last_sweep_at"] = now_iso
+    _auto_heal_state["total_healed_render_jobs"] += len(healed_ids)
+    _auto_heal_state["last_healed_job_ids"] = healed_ids
+    _auto_heal_state["last_pruned_temp_files"] = pruned
+    return {
+        "timestamp": now_iso,
+        "startup_sweep": startup,
+        "healed_render_jobs": healed_ids,
+        "pruned_temp_files": pruned,
+    }
+
+
+async def _auto_heal_watchdog():
+    """Periodic background watchdog to heal stale render jobs and prune temp files."""
+    _auto_heal_state["watchdog_active"] = True
+    try:
+        while True:
+            await asyncio.sleep(_auto_heal_state["interval_seconds"])
+            try:
+                result = _run_auto_heal_sweep(startup=False)
+                if result["healed_render_jobs"] or result["pruned_temp_files"]:
+                    logger.info(
+                        f"Auto-heal watchdog sweep: healed {len(result['healed_render_jobs'])} stale job(s), "
+                        f"pruned {result['pruned_temp_files']} temp file(s)."
+                    )
+            except Exception as e:
+                logger.error(f"Auto-heal watchdog sweep error: {e}")
+    except asyncio.CancelledError:
+        _auto_heal_state["watchdog_active"] = False
+        raise
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing RYDETECH VYBE AI & SONIQ Sovereign Media Production Platform...")
@@ -81,16 +134,28 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Demo media project initialization warning: {e}")
 
-    # Prune stale temporary audio derivatives (preserves immutable uploads/)
-    pruned = AudioCacheManager.prune_temporary_storage(settings.STORAGE_DIR, max_age_hours=48)
-    logger.info(f"Storage resource check: pruned {pruned} temporary stale files.")
+    # Startup auto-heal: recover orphaned render jobs & prune stale temp derivatives
+    startup_heal = _run_auto_heal_sweep(startup=True)
+    logger.info(
+        f"Startup auto-heal complete: healed {len(startup_heal['healed_render_jobs'])} orphaned render job(s), "
+        f"pruned {startup_heal['pruned_temp_files']} temporary stale file(s)."
+    )
     try:
         _ensure_brand_sound_logo()
         logger.info("RYDETECH SONIQ Sound Logo (Sonic Ident) ready in storage and public assets.")
     except Exception as e:
         logger.error(f"Failed to generate initial sound logo: {e}")
-    yield
-    logger.info("Shutting down RYDETECH VYBE & SONIQ AI Platform.")
+
+    watchdog_task = asyncio.create_task(_auto_heal_watchdog())
+    try:
+        yield
+    finally:
+        watchdog_task.cancel()
+        try:
+            await watchdog_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("Shutting down RYDETECH VYBE & SONIQ AI Platform.")
 
 
 app = FastAPI(
@@ -816,7 +881,19 @@ async def get_system_resources():
             "ram_percent_used": ram_pct,
             "disk_free_gb": free_disk_gb,
             "disk_percent_used": disk_pct
-        }
+        },
+        "auto_heal": dict(_auto_heal_state)
+    }
+
+
+@app.post("/api/v1/system/auto-heal")
+async def trigger_auto_heal():
+    """Triggers an immediate auto-heal sweep for stale render jobs and temporary storage."""
+    result = _run_auto_heal_sweep(startup=False)
+    return {
+        "status": "OK",
+        **result,
+        "auto_heal_state": dict(_auto_heal_state),
     }
 
 
