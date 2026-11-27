@@ -187,8 +187,9 @@ class MasteringEngine:
 
         # Step 2: Remove DC offset + Adaptive Spectral Mastering EQ
         clean_audio = audio - np.mean(audio, axis=1, keepdims=True)
+        pre_fb = pre_metrics.get("frequency_balance_pct") or pre_metrics.get("frequency_balance") or {}
         bands = cls._compute_adaptive_studio_eq(
-            pre_metrics.get("frequency_balance", {}),
+            pre_fb,
             bass_bias_db=bass_bias,
             crisp_bias_db=crisp_bias,
         )
@@ -245,8 +246,8 @@ class MasteringEngine:
 
         # Step 9: Post-Analysis Quality Audit & Studio Enhancement Delta
         post_metrics = AudioAnalyzer.full_audio_analysis(mastered_audio, sample_rate)
-        pre_fb = pre_metrics.get("frequency_balance", {})
-        post_fb = post_metrics.get("frequency_balance", {})
+        pre_fb = pre_metrics.get("frequency_balance_pct") or pre_metrics.get("frequency_balance") or {}
+        post_fb = post_metrics.get("frequency_balance_pct") or post_metrics.get("frequency_balance") or {}
         pre_bass = round(pre_fb.get("sub_bass_20_60hz", 0.0) + pre_fb.get("bass_60_250hz", 0.0), 2)
         post_bass = round(post_fb.get("sub_bass_20_60hz", 0.0) + post_fb.get("bass_60_250hz", 0.0), 2)
         pre_crisp = round(pre_fb.get("high_mids_2k_6khz", 0.0) + pre_fb.get("presence_brilliance_6k_20khz", 0.0), 2)

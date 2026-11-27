@@ -51,7 +51,7 @@ class ProductionManagerAgent(BaseAudioAgent):
         p_lower = (prompt or "").lower()
         plan_steps = []
         metrics = acoustic_metrics or {}
-        fb = metrics.get("frequency_balance", {})
+        fb = metrics.get("frequency_balance_pct") or metrics.get("frequency_balance") or {}
         has_clipping = bool(metrics.get("clipping", {}).get("has_clipping"))
         bass_energy = float(fb.get("sub_bass_20_60hz", 8.0)) + float(fb.get("bass_60_250hz", 25.0))
         crisp_energy = float(fb.get("high_mids_2k_6khz", 12.0)) + float(fb.get("presence_brilliance_6k_20khz", 6.0))
