@@ -115,7 +115,8 @@ class AudioRestorationAgent(BaseAudioAgent):
             out_dir = tmp_path / "out"
             out_dir.mkdir(exist_ok=True)
 
-            AudioIO.write_audio(work_audio, in_wav, sample_rate=target_sr, bit_depth="24", format_type="WAV")
+            # DeepFilterNet3 Rust binary expects 16-bit PCM WAV at 48 kHz
+            AudioIO.write_audio(work_audio, in_wav, sample_rate=target_sr, bit_depth="16", format_type="WAV")
 
             proc = await asyncio.create_subprocess_exec(
                 df_bin,
