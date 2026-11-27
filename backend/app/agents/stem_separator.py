@@ -1,5 +1,10 @@
+import asyncio
+import logging
+import shutil
+import sys
+import tempfile
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import numpy as np
 import scipy.signal
 
@@ -7,9 +12,14 @@ from app.agents.base_agent import BaseAudioAgent
 from app.config import settings
 from app.core.audio_io import AudioIO
 
+logger = logging.getLogger("soniq.stems")
+
 
 class StemSeparatorAgent(BaseAudioAgent):
     """AGENT 02: Stem Separation Agent - Separates audio into Vocals, Drums, Bass, and Other."""
+
+    # Enforce 1 concurrent neural Demucs job on CPU VPS so RAM stays bounded
+    _demucs_semaphore = asyncio.Semaphore(1)
 
     def __init__(self):
         super().__init__(
@@ -53,7 +63,84 @@ class StemSeparatorAgent(BaseAudioAgent):
 
         return harmonic, percussive
 
-    async def separate_stems(self, file_path: str, entity_name: str = "track") -> Dict[str, Any]:
+    async def _separate_with_demucs(self, file_path: str) -> Optional[Dict[str, Any]]:
+        """
+        Runs Meta Demucs (htdemucs) in an isolated CPU subprocess behind a 1-job semaphore.
+        Subprocess isolation ensures 100% of PyTorch RAM is reclaimed by the OS immediately after completion.
+        """
+        py_bin = sys.executable or "/root/soniq-ai/venv/bin/python"
+        src = Path(file_path)
+
+        async with self._demucs_semaphore:
+            with tempfile.TemporaryDirectory(prefix="soniq_demucs_") as tmpdir:
+                tmp_out = Path(tmpdir)
+                cmd = [
+                    py_bin, "-m", "demucs",
+                    "-n", "htdemucs",
+                    "--device", "cpu",
+                    "--jobs", "2",
+                    "-o", str(tmp_out),
+                    str(src),
+                ]
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                try:
+                    _, stderr = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+                except asyncio.TimeoutError:
+                    try:
+                        proc.kill()
+                        await proc.wait()
+                    except Exception:
+                        pass
+                    logger.warning("Demucs htdemucs timed out after 300s; falling back to HPSS.")
+                    return None
+
+                if proc.returncode != 0:
+                    logger.warning(f"Demucs failed (rc={proc.returncode}): {stderr.decode(errors='ignore')[-400:]}")
+                    return None
+
+                model_dir = tmp_out / "htdemucs" / src.stem
+                if not model_dir.exists():
+                    return None
+
+                output_files: Dict[str, Any] = {}
+                for stem_name in ("vocals", "drums", "bass", "other"):
+                    stem_src = model_dir / f"{stem_name}.wav"
+                    if not stem_src.exists():
+                        continue
+                    out_filename = f"{src.stem}_{stem_name}.wav"
+                    out_p = settings.STEMS_DIR / out_filename
+                    shutil.copy2(stem_src, out_p)
+                    stem_audio, sr = AudioIO.load_audio(str(out_p))
+                    output_files[stem_name] = {
+                        "stem_name": stem_name,
+                        "file_path": str(out_p),
+                        "download_url": f"/api/v1/audio/download/{out_p.name}",
+                        "duration_seconds": round(stem_audio.shape[1] / sr, 3),
+                    }
+
+                return output_files if len(output_files) == 4 else None
+
+    async def separate_stems(self, file_path: str, entity_name: str = "track", engine: str = "neural") -> Dict[str, Any]:
+        # Try Neural Demucs (htdemucs) first unless fast HPSS mode explicitly requested
+        if engine != "fast":
+            demucs_stems = await self._separate_with_demucs(file_path)
+            if demucs_stems:
+                result = {
+                    "agent_id": self.agent_id,
+                    "status": "COMPLETED",
+                    "engine": "Demucs htdemucs (Neural 4-Stem CPU)",
+                    "source_file": file_path,
+                    "stems": demucs_stems,
+                    "isolation_disclaimer": "Neural Demucs htdemucs 4-stem source separation completed locally on sovereign CPU.",
+                }
+                self.log_execution("SEPARATE_STEMS", {"file": file_path}, {"stems_count": 4, "engine": "demucs"})
+                return result
+
+        # Fast deterministic HPSS fallback
         audio, sr = AudioIO.load_audio(file_path)
         channels, num_samples = audio.shape
         mono = np.mean(audio, axis=0)
@@ -103,9 +190,10 @@ class StemSeparatorAgent(BaseAudioAgent):
         result = {
             "agent_id": self.agent_id,
             "status": "COMPLETED",
+            "engine": "HPSS Spectral (Fast Fallback)",
             "source_file": file_path,
             "stems": output_files,
             "isolation_disclaimer": "AI source separation provides acoustic stem isolation. Artefacts may be present in complex dense mixes."
         }
-        self.log_execution("SEPARATE_STEMS", {"file": file_path}, {"stems_count": len(output_files)})
+        self.log_execution("SEPARATE_STEMS", {"file": file_path}, {"stems_count": len(output_files), "engine": "hpss"})
         return result
