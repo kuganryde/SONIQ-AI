@@ -1229,9 +1229,9 @@ class DirectorPlanRequest(BaseModel):
 
 class RenderVideoRequest(BaseModel):
     project_id: str
-    profile_name: str = "Web 1080p H.264"
+    profile_name: str = "Cinema HQ H.264"
     output_format: str = "mp4"
-    resolution: str = "1080p"
+    resolution: str = "2k"
     frame_rate: float = 30.0
     clips: List[Dict[str, Any]] = []
     lut_name: Optional[str] = None
@@ -1241,6 +1241,12 @@ class RenderVideoRequest(BaseModel):
     engine: str = "auto"
     pip_mode: Optional[str] = None
     pip_scale: float = 0.28
+    playback_speed: float = 1.0
+    video_restore: bool = True
+    cinema_finish: bool = True
+    audio_restore: bool = True
+    audio_surround_51: bool = True
+    quality_preset: str = "cinema_hq"
 
 
 @app.get("/api/v1/projects")
@@ -1470,7 +1476,13 @@ async def render_video_timeline(req: RenderVideoRequest):
         transition_duration=req.transition_duration,
         engine=req.engine,
         pip_mode=req.pip_mode,
-        pip_scale=req.pip_scale
+        pip_scale=req.pip_scale,
+        playback_speed=req.playback_speed,
+        video_restore=req.video_restore,
+        cinema_finish=req.cinema_finish,
+        audio_restore=req.audio_restore,
+        audio_surround_51=req.audio_surround_51,
+        quality_preset=req.quality_preset
     )
     return job
 
