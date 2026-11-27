@@ -13,7 +13,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from app.agents.audio_analyst import AudioAnalystAgent
+from app.agents.acoustic_perception_agent import AcousticPerceptionAgent
+from app.agents.audio_forensics_agent import AudioForensicsAgent
 from app.agents.audio_qa_agent import AudioQAAgent
 from app.agents.audio_restoration import AudioRestorationAgent
 from app.agents.cinema_bass_agent import CINEMA_BASS_PRESETS, CinemaBassAgent
@@ -26,6 +27,7 @@ from app.agents.contracts import (
 )
 from app.agents.mastering_engineer import MasteringEngineerAgent
 from app.agents.stem_separator import StemSeparatorAgent
+from app.agents.studio_enhancement_agent import STUDIO_CATEGORY_PROFILES, StudioEnhancementAgent
 from app.agents.surround_engineer import SurroundEngineerAgent
 from app.core.audio_io import AudioIO
 from app.core.db import get_connection
@@ -76,25 +78,29 @@ class AudioProductionDirector:
         {"agent_id": "cinema_bass_agent", "number": 6, "name": "Cinema Bass & LFE Engineering", "status": "ACTIVE"},
         {"agent_id": "mixing_mastering_agent", "number": 7, "name": "Mixing & Mastering (EBU R128)", "status": "ACTIVE"},
         {"agent_id": "audio_qa_agent", "number": 8, "name": "Audio Quality Assurance (Active Gates)", "status": "ACTIVE"},
-        {"agent_id": "acoustic_perception_agent", "number": 9, "name": "Acoustic Perception & Reference Matching", "status": "PLANNED_BATCH_2"},
+        {"agent_id": "acoustic_perception_agent", "number": 9, "name": "Acoustic Perception & Reference Matching", "status": "ACTIVE"},
     ]
 
     def __init__(self):
-        self.forensics = AudioAnalystAgent()
+        self.forensics = AudioForensicsAgent()
         self.restorer = AudioRestorationAgent()
+        self.studio_enhancer = StudioEnhancementAgent()
         self.stem_separator = StemSeparatorAgent()
         self.cinema_bass = CinemaBassAgent()
         self.masterer = MasteringEngineerAgent()
         self.spatial = SurroundEngineerAgent()
         self.qa = AudioQAAgent()
+        self.perception = AcousticPerceptionAgent()
 
     @classmethod
     def get_registry_info(cls) -> Dict[str, Any]:
         return {
             "orchestrator": "audio_production_director",
-            "version": "1.0.0",
+            "version": "2.0.0",
             "production_modes": [m.value for m in ProductionMode],
             "cinema_bass_presets": list(CINEMA_BASS_PRESETS.keys()),
+            "studio_enhancement_categories": list(STUDIO_CATEGORY_PROFILES.keys()),
+            "restoration_profiles": ["CONSERVATIVE", "PROFESSIONAL", "ADVANCED_STUDIO"],
             "hardware": HardwareMonitor.detect(),
             "agents": cls.AGENT_REGISTRY,
         }
@@ -213,31 +219,34 @@ class AudioProductionDirector:
         output_format = str(ov.get("output_format", "FLAC")).upper()
 
         # ------------------------------------------------------------------
-        # STAGE 1: Agent 01 — Audio Forensics & Diagnostic (read-only)
+        # STAGE 1: Agent 01 — Deep Audio Forensics & Diagnostic (read-only)
         # ------------------------------------------------------------------
-        t_s1 = time.perf_counter()
-        forensics_out = await self.forensics.analyze_recording(current_file)
-        pre_metrics = forensics_out.get("metrics", {})
-        agent_results.append(AgentResult(
+        forensics_res = await self.forensics.execute_task(AgentTask(
             task_id=f"{job_id}_s1",
+            project_id=project_id,
             agent_id="audio_forensics_agent",
-            execution_status=ExecutionStatus.COMPLETED,
-            output_file_path=current_file,
-            processing_report={"summary": forensics_out.get("summary", "")},
-            measurements=pre_metrics,
-            execution_time=round(time.perf_counter() - t_s1, 3),
-            hardware_used=hw["backend"],
-        ).model_dump())
+            input_file_path=current_file,
+        ))
+        agent_results.append(forensics_res.model_dump())
+        forensics_report = forensics_res.processing_report or {}
+        pre_metrics = forensics_res.measurements or {}
+        detected_hum_hz = float(forensics_report.get("hum_analysis", {}).get("detected_mains_hz", 50.0)) or 50.0
+        restoration_profile = str(ov.get("restoration_profile") or forensics_report.get("recommended_restoration_profile") or "PROFESSIONAL").upper()
 
         # ------------------------------------------------------------------
-        # STAGE 2: Agent 02 — AI Audio Restoration (DeepFilterNet3 / De-hum / De-clip)
+        # STAGE 2: Agent 02 — AI Audio Restoration (3 Intensity Profiles + DeepFilterNet3)
         # ------------------------------------------------------------------
         has_clipping = bool(pre_metrics.get("clipping", {}).get("has_clipping"))
         if enable_restore or has_clipping:
             t_s2 = time.perf_counter()
             explicit_denoise = bool(ov.get("neural_denoise", any(w in p_lower for w in ["noise", "hiss", "voice", "vocal", "speech", "podcast", "denoise", "restore"])))
             restore_out = await self.restorer.restore_audio(
-                current_file, denoise=explicit_denoise, dehum_freq=50.0, declip=True
+                current_file,
+                denoise=explicit_denoise,
+                dehum_freq=detected_hum_hz,
+                declip=True,
+                profile=restoration_profile,
+                declick=bool(forensics_report.get("click_pop_analysis", {}).get("clicks_detected", True)),
             )
             current_file = restore_out["restored_file"]
             agent_results.append(AgentResult(
@@ -246,11 +255,27 @@ class AudioProductionDirector:
                 execution_status=ExecutionStatus.COMPLETED,
                 output_asset_ids=[Path(current_file).name],
                 output_file_path=current_file,
-                processing_report={"engine": restore_out.get("engine"), "improvements": restore_out.get("improvements")},
+                processing_report={"profile": restoration_profile, "engine": restore_out.get("engine"), "improvements": restore_out.get("improvements")},
                 measurements=restore_out.get("post_restoration_metrics", {}),
                 execution_time=round(time.perf_counter() - t_s2, 3),
                 hardware_used=hw["backend"],
             ).model_dump())
+
+        # ------------------------------------------------------------------
+        # STAGE 2B (Optional): Agent 03 — Studio Enhancement (7 Audio Category Profiles)
+        # ------------------------------------------------------------------
+        audio_category = ov.get("audio_category")
+        if audio_category:
+            enh_res = await self.studio_enhancer.execute_task(AgentTask(
+                task_id=f"{job_id}_s2b",
+                project_id=project_id,
+                agent_id="studio_enhancement_agent",
+                input_file_path=current_file,
+                processing_profile=str(audio_category).upper(),
+            ))
+            agent_results.append(enh_res.model_dump())
+            if enh_res.execution_status == ExecutionStatus.COMPLETED and enh_res.output_file_path:
+                current_file = enh_res.output_file_path
 
         # ------------------------------------------------------------------
         # STAGE 3 (Optional): Agent 04 — AI Source Separation (Demucs htdemucs)
@@ -392,6 +417,21 @@ class AudioProductionDirector:
                 agent_results.append(re_bass.model_dump())
                 if re_bass.execution_status == ExecutionStatus.COMPLETED and re_bass.output_file_path:
                     master_input_file = re_bass.output_file_path
+
+        # ------------------------------------------------------------------
+        # STAGE 8: Agent 09 — Acoustic Perception & Reference Matching Audit
+        # ------------------------------------------------------------------
+        perc_res = await self.perception.execute_task(AgentTask(
+            task_id=f"{job_id}_s9",
+            project_id=project_id,
+            agent_id="acoustic_perception_agent",
+            input_file_path=current_file,
+            processing_parameters={
+                "original_file_path": file_path,
+                "reference_file_path": ov.get("reference_file_path"),
+            },
+        ))
+        agent_results.append(perc_res.model_dump())
 
         # ------------------------------------------------------------------
         # FINAL DELIVERY EXPORT (Lossless 24-bit WAV or FLAC)
