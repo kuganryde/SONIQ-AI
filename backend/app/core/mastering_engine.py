@@ -202,7 +202,7 @@ class MasteringEngine:
             ratio=2.2,
             attack_ms=15.0,
             release_ms=120.0,
-            makeup_db=1.0,
+            makeup_gain_db=1.0,
         )
 
         # Step 4: Crisp Transient Micro-Polish
