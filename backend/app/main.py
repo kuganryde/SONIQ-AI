@@ -1691,3 +1691,70 @@ async def instant_auto_uplift(req: AutoUpliftAnalyzeRequest):
     except Exception as e:
         logger.exception(f"Instant auto-uplift error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class NLEHitlAnalyzeRequest(BaseModel):
+    asset_id: Optional[str] = None
+    preferred_suite: Optional[str] = None
+    intensity: str = Field("balanced", description="subtle | balanced | dynamic")
+    fallback_duration: float = 10.0
+    fallback_aspect: str = "16:9"
+
+
+class NLEHitlApplyRequest(BaseModel):
+    proposal_id: str
+    suite_id: str
+    color_grade: str
+    effects: List[str] = Field(default_factory=list)
+    transition_id: str = "dissolve"
+    transition_duration: float = 0.6
+    aspect_ratio: str = "16:9"
+    playback_speed: float = 1.0
+
+
+@app.get("/api/v1/video/nle-suites")
+async def get_nle_suites_library():
+    """Returns curated CapCut, DaVinci Resolve, and Final Cut Pro lightweight effect/transition suites."""
+    return NLESuiteService.get_library()
+
+
+@app.post("/api/v1/video/nle-suites/analyze-hitl")
+async def analyze_video_for_nle_hitl(req: NLEHitlAnalyzeRequest):
+    """Analyzes loaded video telemetry and returns an HITL-gated NLE preset proposal."""
+    try:
+        return NLESuiteService.analyze_video_for_hitl(
+            asset_id=req.asset_id,
+            preferred_suite=req.preferred_suite,
+            intensity=req.intensity,
+            fallback_duration=req.fallback_duration,
+            fallback_aspect=req.fallback_aspect,
+        )
+    except Exception as e:
+        logger.exception(f"NLE HITL analyze error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/video/nle-suites/apply-hitl")
+async def apply_nle_hitl_decision(req: NLEHitlApplyRequest):
+    """Validates and records a human-approved NLE suite configuration for timeline/render execution."""
+    if req.suite_id not in NLESuiteService.SUITES:
+        raise HTTPException(status_code=400, detail=f"Unsupported NLE suite: {req.suite_id}")
+    approved_at = datetime.now(timezone.utc).isoformat()
+    logger.info(
+        f"HITL NLE decision approved: proposal={req.proposal_id} suite={req.suite_id} "
+        f"lut={req.color_grade} effects={req.effects} transition={req.transition_id}({req.transition_duration}s)"
+    )
+    return {
+        "status": "APPROVED",
+        "approved_at": approved_at,
+        "proposal_id": req.proposal_id,
+        "applied_config": {
+            "suite_id": req.suite_id,
+            "color_grade": req.color_grade,
+            "effects": req.effects,
+            "transition_id": req.transition_id,
+            "transition_duration": max(0.2, min(2.0, req.transition_duration)),
+            "aspect_ratio": req.aspect_ratio,
+            "playback_speed": max(0.5, min(2.0, req.playback_speed)),
+        },
+    }
