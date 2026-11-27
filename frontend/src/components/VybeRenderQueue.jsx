@@ -13,7 +13,7 @@ import {
 import { apiUrl, safeFetchJson } from '../config/api';
 
 export default function VybeRenderQueue({
-  currentResolution = '1080p',
+  currentResolution = '2k',
   currentAspectRatio = '16:9',
   timelineClips = [],
   selectedLut = 'clean',
@@ -22,12 +22,17 @@ export default function VybeRenderQueue({
   transitionDuration = 0.75,
   renderEngine = 'auto',
   onSelectRenderEngine,
-  pipMode = 'single'
+  pipMode = 'single',
+  playbackSpeed = 1.0
 }) {
-  const [resolution, setResolution] = useState(currentResolution);
-  const [profile, setProfile] = useState('Web 1080p H.264');
+  const [resolution, setResolution] = useState(currentResolution || '2k');
+  const [profile, setProfile] = useState('Cinema HQ H.264 (CRF 18)');
   const [frameRate, setFrameRate] = useState(30.0);
   const [outputFormat, setOutputFormat] = useState('mp4');
+  const [videoRestore, setVideoRestore] = useState(true);
+  const [cinemaFinish, setCinemaFinish] = useState(true);
+  const [audioRestore, setAudioRestore] = useState(true);
+  const [audioSurround51, setAudioSurround51] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
@@ -52,6 +57,12 @@ export default function VybeRenderQueue({
     setErrorMsg('');
 
     try {
+      const qualityPreset = profile.includes('HEVC')
+        ? 'hevc_hq'
+        : profile.includes('Fast')
+        ? 'balanced'
+        : 'cinema_hq';
+
       const payload = {
         project_id: 'proj_vybe_demo',
         profile_name: profile,
@@ -64,7 +75,13 @@ export default function VybeRenderQueue({
         transition_style: selectedTransition || 'dissolve',
         transition_duration: transitionDuration || 0.75,
         engine: renderEngine || 'auto',
-        pip_mode: pipMode !== 'single' ? pipMode : null
+        pip_mode: pipMode !== 'single' ? pipMode : null,
+        playback_speed: playbackSpeed || 1.0,
+        video_restore: videoRestore,
+        cinema_finish: cinemaFinish,
+        audio_restore: audioRestore,
+        audio_surround_51: audioSurround51,
+        quality_preset: qualityPreset
       };
 
       const res = await safeFetchJson(apiUrl('/api/v1/render/video'), {
