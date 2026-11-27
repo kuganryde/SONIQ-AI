@@ -133,9 +133,10 @@ export default function VybeRenderQueue({
               onChange={(e) => setResolution(e.target.value)}
               className="w-full bg-[#080b11] border border-slate-800 rounded-lg p-1.5 text-xs text-slate-200 font-mono focus:border-cyan-500"
             >
+              <option value="2k">2K QHD Cinema (2560x1440)</option>
+              <option value="4k">4K Ultra HD (3840x2160)</option>
               <option value="1080p">1080p Full HD (1920x1080)</option>
               <option value="720p">720p HD (1280x720)</option>
-              <option value="4k">4K Ultra HD (3840x2160)</option>
               <option value="9:16">9:16 Vertical (1080x1920)</option>
               <option value="1:1">1:1 Square (1080x1080)</option>
             </select>
@@ -149,10 +150,9 @@ export default function VybeRenderQueue({
               onChange={(e) => setProfile(e.target.value)}
               className="w-full bg-[#080b11] border border-slate-800 rounded-lg p-1.5 text-xs text-slate-200 font-mono focus:border-cyan-500"
             >
-              <option value="Web 1080p H.264">Universal H.264 / AAC (Web & Social)</option>
-              <option value="HEVC High Efficiency">H.265 / HEVC High Efficiency</option>
-              <option value="ProRes 422 Master">Apple ProRes 422 Studio Master</option>
-              <option value="AV1 Next-Gen">AV1 Sovereign Open Codec</option>
+              <option value="Cinema HQ H.264 (CRF 18)">Cinema HQ H.264 (CRF 18 High Profile)</option>
+              <option value="HEVC 2K/4K Master (H.265)">HEVC / H.265 2K/4K High Efficiency</option>
+              <option value="Fast Web H.264 (CRF 20)">Fast Web H.264 (CRF 20)</option>
             </select>
           </div>
 
@@ -183,6 +183,26 @@ export default function VybeRenderQueue({
               <option value="mlt">MLT Framework (melt / OpenShot)</option>
             </select>
           </div>
+        </div>
+
+        {/* Cinema Uplift, Video/Audio Restoration & 5.1 Surround Mastering Controls */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 text-[11px] font-mono">
+          <label className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#080b11] border border-slate-800 cursor-pointer">
+            <span className="text-slate-300">Video Restore</span>
+            <input type="checkbox" checked={videoRestore} onChange={(e) => setVideoRestore(e.target.checked)} className="accent-cyan-400" />
+          </label>
+          <label className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#080b11] border border-slate-800 cursor-pointer">
+            <span className="text-slate-300">Cinema Finish</span>
+            <input type="checkbox" checked={cinemaFinish} onChange={(e) => setCinemaFinish(e.target.checked)} className="accent-cyan-400" />
+          </label>
+          <label className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#080b11] border border-slate-800 cursor-pointer">
+            <span className="text-slate-300">DFNet3 Audio</span>
+            <input type="checkbox" checked={audioRestore} onChange={(e) => setAudioRestore(e.target.checked)} className="accent-cyan-400" />
+          </label>
+          <label className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#080b11] border border-slate-800 cursor-pointer">
+            <span className="text-slate-300">5.1 Surround</span>
+            <input type="checkbox" checked={audioSurround51} onChange={(e) => setAudioSurround51(e.target.checked)} className="accent-cyan-400" />
+          </label>
         </div>
 
         {/* Active Look & VFX Pipeline Telemetry */}

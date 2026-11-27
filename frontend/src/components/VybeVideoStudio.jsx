@@ -345,11 +345,23 @@ export default function VybeVideoStudio({ onTransferAudioToSoniq }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           project_id: 'proj_vybe_demo',
-          profile_name: 'Web 1080p H.264',
+          profile_name: 'Cinema HQ H.264 (CRF 18)',
           output_format: 'mp4',
-          resolution: upliftedData.aspect_ratio === '9:16' ? '9:16' : '1080p',
+          resolution: upliftedData.aspect_ratio === '9:16' ? '9:16' : '2k',
           frame_rate: 30.0,
-          clips: upliftedData.video_clips || []
+          clips: upliftedData.video_clips || videoClips || [],
+          lut_name: upliftedData.color_grade || colorGrade || 'kodak_2383',
+          frei0r_effects: activeFrei0rEffects || [],
+          transition_style: selectedTransition || 'dissolve',
+          transition_duration: transitionDuration || 0.75,
+          engine: renderEngine || 'auto',
+          pip_mode: pipMode !== 'single' ? pipMode : null,
+          playback_speed: playbackSpeed || 1.0,
+          video_restore: true,
+          cinema_finish: true,
+          audio_restore: true,
+          audio_surround_51: true,
+          quality_preset: 'cinema_hq'
         })
       });
     } catch (e) {
