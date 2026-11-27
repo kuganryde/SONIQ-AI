@@ -250,6 +250,84 @@ class VideoRenderService:
 
         return healed_ids
 
+    @classmethod
+    def delete_job(cls, job_id: str) -> Dict[str, Any]:
+        """Deletes a render job record and its output video + MLT files from disk."""
+        job = cls.get_job(job_id)
+        if not job:
+            return {"deleted": False, "job_id": job_id, "removed_files": []}
+
+        # Cancel active worker task if still running
+        task = cls._active_tasks.pop(job_id, None)
+        cls._job_heartbeats.pop(job_id, None)
+        if task and not task.done():
+            try:
+                task.cancel()
+            except Exception:
+                pass
+
+        removed_files: List[str] = []
+        exports_root = settings.VIDEO_EXPORTS_DIR.resolve()
+
+        candidates: List[Path] = [
+            settings.VIDEO_EXPORTS_DIR / f"vybe_project_{job_id}.mlt",
+            settings.VIDEO_EXPORTS_DIR / f"vybe_export_{job_id}.{job.get('output_format') or 'mp4'}",
+        ]
+        if job.get("output_file_path"):
+            candidates.append(Path(job["output_file_path"]))
+
+        seen = set()
+        for p in candidates:
+            try:
+                rp = p.resolve()
+                if rp in seen:
+                    continue
+                seen.add(rp)
+                # Strict containment check inside VIDEO_EXPORTS_DIR
+                if exports_root in rp.parents and rp.exists() and rp.is_file():
+                    rp.unlink()
+                    removed_files.append(rp.name)
+            except Exception as e:
+                logger.warning(f"Failed removing export artifact {p}: {e}")
+
+        conn = get_connection()
+        try:
+            with conn:
+                conn.execute("DELETE FROM render_jobs WHERE id = ?", (job_id,))
+        finally:
+            conn.close()
+
+        logger.info(f"Deleted render job {job_id} (removed files: {removed_files})")
+        return {"deleted": True, "job_id": job_id, "removed_files": removed_files}
+
+    @classmethod
+    def clear_jobs(cls, failed_only: bool = False) -> Dict[str, Any]:
+        """Bulk deletes failed jobs (or all finished/non-rendering jobs) and their disk artifacts."""
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            if failed_only:
+                cur.execute("SELECT id FROM render_jobs WHERE status = 'FAILED'")
+            else:
+                cur.execute("SELECT id FROM render_jobs WHERE status != 'RENDERING'")
+            ids = [r["id"] for r in cur.fetchall()]
+        finally:
+            conn.close()
+
+        deleted_ids: List[str] = []
+        removed_files: List[str] = []
+        for jid in ids:
+            res = cls.delete_job(jid)
+            if res.get("deleted"):
+                deleted_ids.append(jid)
+                removed_files.extend(res.get("removed_files", []))
+
+        return {
+            "deleted_count": len(deleted_ids),
+            "deleted_job_ids": deleted_ids,
+            "removed_files_count": len(removed_files),
+        }
+
     @staticmethod
     def _probe_has_audio(file_path: str) -> bool:
         try:
