@@ -42,6 +42,10 @@ from app.agents.mastering_engineer import MasteringEngineerAgent
 from app.agents.surround_engineer import SurroundEngineerAgent
 from app.agents.quality_control import QualityControlAgent
 from app.agents.ai_director import AIDirectorAgent
+from app.agents.contracts import AgentTask, ProductionMode
+from app.agents.cinema_bass_agent import CinemaBassAgent, CINEMA_BASS_PRESETS
+from app.agents.audio_qa_agent import AudioQAAgent
+from app.agents.audio_production_director import AudioProductionDirector
 from app.core.resource_guard import (
     AudioCacheManager,
     RateLimitMiddleware,
@@ -188,6 +192,9 @@ vocal_agent = VocalEngineerAgent()
 mastering_agent = MasteringEngineerAgent()
 surround_agent = SurroundEngineerAgent()
 qc_agent = QualityControlAgent()
+audio_director = AudioProductionDirector()
+cinema_bass_agent = CinemaBassAgent()
+audio_qa_agent = AudioQAAgent()
 
 
 # Request / Response Schemas
