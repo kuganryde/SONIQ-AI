@@ -8,7 +8,8 @@ import {
   Play, 
   Cpu, 
   Layers,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 import { apiUrl, safeFetchJson } from '../config/api';
 
@@ -36,6 +37,34 @@ export default function VybeRenderQueue({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+
+  const handleDeleteJob = async (jobId) => {
+    setDeletingId(jobId);
+    setErrorMsg('');
+    try {
+      await safeFetchJson(apiUrl(`/api/v1/render/jobs/${jobId}`), { method: 'DELETE' });
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    } catch (err) {
+      setErrorMsg(err.message || `Failed to delete ${jobId}`);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleClearJobs = async (failedOnly) => {
+    setErrorMsg('');
+    try {
+      await safeFetchJson(apiUrl(`/api/v1/render/jobs?failed_only=${failedOnly ? 'true' : 'false'}`), {
+        method: 'DELETE',
+      });
+      setConfirmClearAll(false);
+      await fetchJobs();
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to clear render jobs');
+    }
+  };
 
   const fetchJobs = async () => {
     try {
@@ -247,9 +276,47 @@ export default function VybeRenderQueue({
 
       {/* 2. Active Render Jobs Queue */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 space-y-2">
-        <h4 className="text-xs font-bold text-slate-300 font-mono uppercase pb-1 border-b border-slate-800">
-          Render Jobs & Output Library ({jobs.length})
-        </h4>
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-slate-800">
+          <h4 className="text-xs font-bold text-slate-300 font-mono uppercase">
+            Render Jobs &amp; Output Library ({jobs.length})
+          </h4>
+          {jobs.length > 0 && (
+            <div className="flex items-center space-x-1.5">
+              {jobs.some((j) => j.status === 'FAILED') && (
+                <button
+                  onClick={() => handleClearJobs(true)}
+                  className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[10px] font-mono transition"
+                >
+                  Clear Failed
+                </button>
+              )}
+              {!confirmClearAll ? (
+                <button
+                  onClick={() => setConfirmClearAll(true)}
+                  className="px-2 py-0.5 rounded bg-red-950/60 hover:bg-red-900/70 border border-red-800/70 text-red-300 text-[10px] font-mono flex items-center space-x-1 transition"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Clear All</span>
+                </button>
+              ) : (
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={() => handleClearJobs(false)}
+                    className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-500 text-white text-[10px] font-mono font-bold transition"
+                  >
+                    Confirm Delete All
+                  </button>
+                  <button
+                    onClick={() => setConfirmClearAll(false)}
+                    className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-mono transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
           {jobs.map((j) => (

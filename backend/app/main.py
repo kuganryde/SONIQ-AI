@@ -1584,6 +1584,21 @@ async def get_render_job(job_id: str):
     return job
 
 
+@app.delete("/api/v1/render/jobs/{job_id}")
+async def delete_render_job(job_id: str):
+    """Deletes a render job and removes its exported video and MLT files from disk."""
+    res = VideoRenderService.delete_job(job_id)
+    if not res.get("deleted"):
+        raise HTTPException(status_code=404, detail="Render job not found")
+    return res
+
+
+@app.delete("/api/v1/render/jobs")
+async def clear_render_jobs(failed_only: bool = False):
+    """Bulk deletes failed render jobs (or all non-active jobs) and frees disk storage."""
+    return VideoRenderService.clear_jobs(failed_only=failed_only)
+
+
 @app.get("/api/v1/render/stream/{job_id}")
 async def stream_rendered_video(job_id: str, request: Request):
     """Streams rendered master video with byte-range support."""
