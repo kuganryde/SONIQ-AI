@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { apiUrl, safeFetchJson, resolveAudioUrl } from '../config/api';
-import { DownloadCloud, ShieldCheck, AlertTriangle, FileText, Download, CheckCircle2 } from 'lucide-react';
+import { DownloadCloud, ShieldCheck, AlertTriangle, FileText, Download, CheckCircle2, Trash2, RefreshCw, HardDrive } from 'lucide-react';
 
 export default function ExportCenter({
   activeFile,
@@ -13,6 +13,62 @@ export default function ExportCenter({
   const [exporting, setExporting] = useState(false);
   const [exportCertificate, setExportCertificate] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [audioFiles, setAudioFiles] = useState([]);
+  const [totalSizeMb, setTotalSizeMb] = useState(0);
+  const [fileCategory, setFileCategory] = useState('all');
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [deletingKey, setDeletingKey] = useState(null);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [cleanupNotice, setCleanupNotice] = useState('');
+
+  const fetchAudioFiles = async (cat = fileCategory) => {
+    setLoadingFiles(true);
+    try {
+      const data = await safeFetchJson(apiUrl(`/api/v1/audio/files?category=${cat}`));
+      setAudioFiles(data.files || []);
+      setTotalSizeMb(data.total_size_mb || 0);
+    } catch (e) {
+      console.error('Failed to list SONIQ audio files:', e);
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAudioFiles(fileCategory);
+  }, [fileCategory]);
+
+  const handleDeleteAudioFile = async (category, filename) => {
+    const key = `${category}/${filename}`;
+    setDeletingKey(key);
+    setCleanupNotice('');
+    try {
+      await safeFetchJson(apiUrl(`/api/v1/audio/files/${encodeURIComponent(category)}/${encodeURIComponent(filename)}`), {
+        method: 'DELETE',
+      });
+      setAudioFiles((prev) => prev.filter((f) => !(f.category === category && f.filename === filename)));
+      fetchAudioFiles(fileCategory);
+    } catch (e) {
+      setErrorMessage(e.message || `Failed to delete ${filename}`);
+    } finally {
+      setDeletingKey(null);
+    }
+  };
+
+  const handleCleanupAudioFiles = async (targetCategory) => {
+    setCleanupNotice('');
+    setErrorMessage('');
+    try {
+      const res = await safeFetchJson(apiUrl(`/api/v1/audio/files?category=${targetCategory}`), {
+        method: 'DELETE',
+      });
+      setConfirmClearAll(false);
+      setCleanupNotice(`Removed ${res.deleted_count} file(s), freed ${res.freed_mb} MB.`);
+      await fetchAudioFiles(fileCategory);
+    } catch (e) {
+      setErrorMessage(e.message || 'Audio storage cleanup failed');
+    }
+  };
 
   const handleExport = async () => {
     setErrorMessage('');
@@ -38,6 +94,7 @@ export default function ExportCenter({
         })
       });
       setExportCertificate(data);
+      fetchAudioFiles(fileCategory);
     } catch (e) {
       setErrorMessage(e.message);
       alert(`Export error: ${e.message}`);
@@ -268,6 +325,145 @@ export default function ExportCenter({
           <div className="p-2.5 rounded-lg bg-slate-900/50 border border-slate-800/80">
             <span className="text-slate-300 font-bold">Parent Enterprise:</span> RYDETECH GLOBAL ENTERPRISE
           </div>
+        </div>
+      </div>
+
+      {/* SONIQ AI Audio File Manager & Storage Cleanup */}
+      <div className="bg-[#0d111a] border border-slate-800 rounded-xl p-5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div className="flex items-center space-x-2.5">
+            <HardDrive className="w-4 h-4 text-cyan-400" />
+            <div>
+              <h3 className="text-xs font-bold font-mono text-white uppercase">
+                SONIQ Audio Files &amp; Storage Library ({audioFiles.length})
+              </h3>
+              <p className="text-[10px] text-slate-400 font-mono">
+                Total shown: {totalSizeMb} MB &bull; Protected demo &amp; brand assets are preserved automatically.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              onClick={() => fetchAudioFiles(fileCategory)}
+              disabled={loadingFiles}
+              className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-mono flex items-center space-x-1 transition"
+            >
+              <RefreshCw className={`w-3 h-3 text-cyan-400 ${loadingFiles ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+            <button
+              onClick={() => handleCleanupAudioFiles('derivatives')}
+              className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-mono transition"
+              title="Deletes processed, stems, and synth derivatives while keeping uploads & exports"
+            >
+              Clean Temp Derivatives
+            </button>
+            {!confirmClearAll ? (
+              <button
+                onClick={() => setConfirmClearAll(true)}
+                className="px-2.5 py-1 rounded bg-red-950/60 hover:bg-red-900/70 border border-red-800/70 text-red-300 text-[11px] font-mono flex items-center space-x-1 transition"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>Clear {fileCategory === 'all' ? 'All' : fileCategory}</span>
+              </button>
+            ) : (
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => handleCleanupAudioFiles(fileCategory)}
+                  className="px-2.5 py-1 rounded bg-red-600 hover:bg-red-500 text-white text-[11px] font-mono font-bold transition"
+                >
+                  Confirm Delete
+                </button>
+                <button
+                  onClick={() => setConfirmClearAll(false)}
+                  className="px-2 py-1 rounded bg-slate-800 text-slate-300 text-[11px] font-mono transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Category Filter Tabs */}
+        <div className="flex flex-wrap items-center gap-1 text-[11px] font-mono">
+          {['all', 'exports', 'processed', 'stems', 'uploads', 'synths'].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => {
+                setFileCategory(cat);
+                setConfirmClearAll(false);
+              }}
+              className={`px-2.5 py-1 rounded-md border uppercase transition ${
+                fileCategory === cat
+                  ? 'bg-cyan-500/20 border-cyan-500/60 text-cyan-300 font-bold'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {cleanupNotice && (
+          <div className="p-2 rounded bg-emerald-950/40 border border-emerald-800/70 text-emerald-300 text-xs font-mono">
+            {cleanupNotice}
+          </div>
+        )}
+
+        {/* File Rows */}
+        <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
+          {audioFiles.map((f) => {
+            const key = `${f.category}/${f.filename}`;
+            return (
+              <div
+                key={key}
+                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[#080b11] border border-slate-800/80 text-xs"
+              >
+                <div className="flex items-center space-x-2.5 min-w-0">
+                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono text-[10px] uppercase shrink-0">
+                    {f.category}
+                  </span>
+                  <span className="font-mono text-slate-200 truncate" title={f.filename}>
+                    {f.filename}
+                  </span>
+                </div>
+
+                <div className="flex items-center space-x-2.5 shrink-0">
+                  <span className="text-[11px] font-mono text-slate-400">{f.size_mb} MB</span>
+                  <a
+                    href={apiUrl(f.download_url)}
+                    download={f.filename}
+                    className="px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-[10px] font-mono flex items-center space-x-1 transition"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>Download</span>
+                  </a>
+                  {f.protected ? (
+                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-500 text-[10px] font-mono">
+                      PROTECTED
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleDeleteAudioFile(f.category, f.filename)}
+                      disabled={deletingKey === key}
+                      title={`Delete ${f.filename}`}
+                      className="p-1 rounded bg-slate-800/80 hover:bg-red-900/70 border border-slate-700 hover:border-red-700/70 text-slate-400 hover:text-red-200 disabled:opacity-40 transition"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {audioFiles.length === 0 && (
+            <div className="py-6 text-center text-slate-500 font-mono text-xs">
+              No audio files in this category.
+            </div>
+          )}
         </div>
       </div>
 
