@@ -22,8 +22,11 @@ backend/storage/thumbnails/*
 !backend/storage/thumbnails/.gitkeep
 backend/storage/video_exports/*
 !backend/storage/video_exports/.gitkeep
+backend/storage/temp_imports/*
+!backend/storage/temp_imports/.gitkeep
 backend/storage/*.db
 backend/storage/*.sqlite3
+frontend/vite.config.js.timestamp-*
 __pycache__/
 *.pyc
 .DS_Store
