@@ -406,7 +406,21 @@ class VideoRenderService:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            stdout, stderr = await proc.communicate()
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(),
+                    timeout=VideoRenderService.RENDER_SUBPROCESS_TIMEOUT_SEC
+                )
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except Exception:
+                    pass
+                err_text = f"Render subprocess timed out after {int(VideoRenderService.RENDER_SUBPROCESS_TIMEOUT_SEC)}s and was auto-terminated."
+                logger.error(f"Render job {job_id} timed out: {err_text}")
+                VideoRenderService._update_job_status(job_id, "FAILED", 0.0, error_msg=err_text)
+                return
 
             if proc.returncode != 0:
                 err_text = stderr.decode(errors="ignore")[-800:]
@@ -426,6 +440,15 @@ class VideoRenderService:
             )
             logger.info(f"Render job {job_id} successfully completed: {out_file}")
 
+        except asyncio.CancelledError:
+            logger.warning(f"Render job {job_id} cancelled by auto-heal watchdog.")
+            VideoRenderService._update_job_status(
+                job_id, "FAILED", 0.0, error_msg="Render job cancelled by auto-heal watchdog."
+            )
+            raise
         except Exception as e:
             logger.exception(f"Unexpected render error for {job_id}: {e}")
             VideoRenderService._update_job_status(job_id, "FAILED", 0.0, error_msg=str(e))
+        finally:
+            VideoRenderService._active_tasks.pop(job_id, None)
+            VideoRenderService._job_heartbeats.pop(job_id, None)
