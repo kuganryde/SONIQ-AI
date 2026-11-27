@@ -364,6 +364,15 @@ export default function VybeRenderQueue({
                       <span>MLT</span>
                     </a>
                   )}
+
+                  <button
+                    onClick={() => handleDeleteJob(j.id)}
+                    disabled={deletingId === j.id}
+                    title={`Delete ${j.id} and its exported files`}
+                    className="p-1 rounded bg-slate-800/80 hover:bg-red-900/70 border border-slate-700 hover:border-red-700/70 text-slate-400 hover:text-red-200 disabled:opacity-40 transition"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
                 </div>
               </div>
 
