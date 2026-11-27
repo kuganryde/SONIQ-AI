@@ -23,6 +23,7 @@ import VybeSocialStudio from './VybeSocialStudio';
 import VybeRenderQueue from './VybeRenderQueue';
 import VybeUpliftBanner from './VybeUpliftBanner';
 import VybeHITLModal from './VybeHITLModal';
+import VybeNLESuitePanel from './VybeNLESuitePanel';
 import { apiUrl, safeFetchJson, resolveAudioUrl } from '../config/api';
 
 export default function VybeVideoStudio({ onTransferAudioToSoniq }) {

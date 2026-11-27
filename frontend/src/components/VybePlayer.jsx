@@ -30,9 +30,17 @@ export default function VybePlayer({
   activeFrei0rEffects = [],
   activeOverlayTitle = '',
   showSafeZones = false,
-  onToggleSafeZones
+  onToggleSafeZones,
+  playbackSpeed = 1.0
 }) {
   const videoRef = useRef(null);
+
+  // Synchronize playback rate
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = playbackSpeed || 1.0;
+    }
+  }, [playbackSpeed]);
 
   // Synchronize HTML5 video element with parent currentTime state
   useEffect(() => {
