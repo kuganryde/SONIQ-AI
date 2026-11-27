@@ -156,13 +156,41 @@ class AudioRestorationAgent(BaseAudioAgent):
 
             return cleaned, True
 
+    @staticmethod
+    def repair_clicks_pops(audio: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Removes short impulse clicks/pops via localized median replacement while preserving transients."""
+        out = np.copy(audio)
+        for ch in range(out.shape[0]):
+            x = out[ch]
+            if len(x) < 15:
+                continue
+            med_sig = scipy.signal.medfilt(x, kernel_size=5)
+            residual = np.abs(x - med_sig)
+            thresh = float(np.median(residual) + 12.0 * (np.median(np.abs(residual - np.median(residual))) + 1e-9))
+            spikes = (residual > max(thresh, 0.08))
+            if np.any(spikes) and np.sum(spikes) < len(x) * 0.02:
+                out[ch, spikes] = med_sig[spikes]
+        return out
+
     async def restore_audio(
         self,
         file_path: str,
         denoise: bool = True,
         dehum_freq: float = 50.0,
-        declip: bool = True
+        declip: bool = True,
+        profile: str = "PROFESSIONAL",
+        declick: bool = True
     ) -> Dict[str, Any]:
+        """
+        Restores audio using one of three intensity profiles:
+        - CONSERVATIVE: minimal intervention, 35% wet/dry neural blend
+        - PROFESSIONAL: full neural denoise + de-hum + de-click + de-clip
+        - ADVANCED_STUDIO: full neural denoise + de-hum + de-click + de-clip + gentle spectral tail cleanup
+        """
+        prof = (profile or "PROFESSIONAL").upper()
+        if prof not in ("CONSERVATIVE", "PROFESSIONAL", "ADVANCED_STUDIO"):
+            prof = "PROFESSIONAL"
+
         audio, sr = AudioIO.load_audio(file_path)
         pre_metrics = AudioAnalyzer.full_audio_analysis(audio, sr)
 
@@ -171,29 +199,41 @@ class AudioRestorationAgent(BaseAudioAgent):
         # 1. De-hum
         if dehum_freq > 0:
             processed = self.remove_mains_hum(processed, sr, freq=dehum_freq)
-        # 2. Neural DeepFilterNet3 denoising (with spectral fallback)
+        # 2. De-click / de-pop
+        if declick and prof in ("PROFESSIONAL", "ADVANCED_STUDIO"):
+            processed = self.repair_clicks_pops(processed, sr)
+        # 3. Neural DeepFilterNet3 denoising (with profile-controlled wet/dry blend)
         if denoise:
             df_audio, used_df = await self.denoise_deepfilternet(processed, sr)
             if used_df:
-                processed = df_audio
-                denoise_engine = "DeepFilterNet3 (Neural 48kHz)"
+                if prof == "CONSERVATIVE":
+                    processed = processed * 0.65 + df_audio * 0.35
+                    denoise_engine = "DeepFilterNet3 (Conservative 35% Blend)"
+                elif prof == "ADVANCED_STUDIO":
+                    processed = self.reduce_noise_spectral(df_audio, sr, reduction_db=6.0)
+                    denoise_engine = "DeepFilterNet3 + Spectral Tail Cleanup (Advanced Studio)"
+                else:
+                    processed = df_audio
+                    denoise_engine = "DeepFilterNet3 (Neural 48kHz)"
             else:
-                processed = self.reduce_noise_spectral(processed, sr, reduction_db=10.0)
-                denoise_engine = "Spectral Subtraction (Fallback)"
-        # 3. De-clip
+                red_db = 6.0 if prof == "CONSERVATIVE" else (14.0 if prof == "ADVANCED_STUDIO" else 10.0)
+                processed = self.reduce_noise_spectral(processed, sr, reduction_db=red_db)
+                denoise_engine = f"Spectral Subtraction ({prof} Fallback)"
+        # 4. De-clip
         if declip:
             processed = self.repair_clipping(processed)
 
         post_metrics = AudioAnalyzer.full_audio_analysis(processed, sr)
 
         # Write non-destructive restored file
-        out_filename = f"{Path(file_path).stem}_restored.wav"
+        out_filename = f"{Path(file_path).stem}_restored_{prof.lower()}.wav"
         out_p = settings.PROCESSED_DIR / out_filename
         AudioIO.write_audio(processed, out_p, sample_rate=sr, bit_depth="24", format_type="WAV")
 
         result = {
             "agent_id": self.agent_id,
             "status": "COMPLETED",
+            "profile": prof,
             "engine": denoise_engine,
             "source_file": file_path,
             "restored_file": str(out_p),
@@ -206,5 +246,5 @@ class AudioRestorationAgent(BaseAudioAgent):
                 "phase_integrity_preserved": abs(post_metrics["phase_correlation"] - pre_metrics["phase_correlation"]) < 0.1
             }
         }
-        self.log_execution("RESTORE_AUDIO", {"file": file_path}, {"noise_reduction": denoise, "engine": denoise_engine})
+        self.log_execution("RESTORE_AUDIO", {"file": file_path, "profile": prof}, {"noise_reduction": denoise, "engine": denoise_engine})
         return result
