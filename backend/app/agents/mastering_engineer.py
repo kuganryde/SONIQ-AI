@@ -24,9 +24,11 @@ class MasteringEngineerAgent(BaseAudioAgent):
     async def execute_mastering(
         self,
         file_path: str,
-        profile_key: str = "streaming",
+        profile_key: str = "studio_master",
         custom_target_lufs: Optional[float] = None,
-        custom_ceiling_dbtp: Optional[float] = None
+        custom_ceiling_dbtp: Optional[float] = None,
+        bass_lift_bias_db: Optional[float] = None,
+        crisp_air_bias_db: Optional[float] = None,
     ) -> Dict[str, Any]:
         audio, sr = AudioIO.load_audio(file_path)
 
@@ -35,7 +37,9 @@ class MasteringEngineerAgent(BaseAudioAgent):
             sr,
             profile_key=profile_key,
             custom_target_lufs=custom_target_lufs,
-            custom_ceiling_dbtp=custom_ceiling_dbtp
+            custom_ceiling_dbtp=custom_ceiling_dbtp,
+            bass_lift_bias_db=bass_lift_bias_db,
+            crisp_air_bias_db=crisp_air_bias_db,
         )
 
         out_filename = f"{Path(file_path).stem}_mastered_{profile_key}.wav"
