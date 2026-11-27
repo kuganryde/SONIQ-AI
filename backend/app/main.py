@@ -43,6 +43,9 @@ from app.agents.surround_engineer import SurroundEngineerAgent
 from app.agents.quality_control import QualityControlAgent
 from app.agents.ai_director import AIDirectorAgent
 from app.agents.contracts import AgentTask, ProductionMode
+from app.agents.audio_forensics_agent import AudioForensicsAgent
+from app.agents.studio_enhancement_agent import StudioEnhancementAgent
+from app.agents.acoustic_perception_agent import AcousticPerceptionAgent
 from app.agents.cinema_bass_agent import CinemaBassAgent, CINEMA_BASS_PRESETS
 from app.agents.audio_qa_agent import AudioQAAgent
 from app.agents.audio_production_director import AudioProductionDirector
@@ -193,6 +196,9 @@ mastering_agent = MasteringEngineerAgent()
 surround_agent = SurroundEngineerAgent()
 qc_agent = QualityControlAgent()
 audio_director = AudioProductionDirector()
+audio_forensics_agent = AudioForensicsAgent()
+studio_enhancement_agent = StudioEnhancementAgent()
+acoustic_perception_agent = AcousticPerceptionAgent()
 cinema_bass_agent = CinemaBassAgent()
 audio_qa_agent = AudioQAAgent()
 
@@ -2014,4 +2020,57 @@ async def run_audio_qa_agent(req: AudioQARequest):
         },
     )
     res = await audio_qa_agent.execute_task(task)
+    return res.model_dump()
+
+
+class ForensicsRequest(BaseModel):
+    file_path: str
+
+
+class StudioEnhanceRequest(BaseModel):
+    file_path: str
+    category: str = Field("MUSIC", description="VOCALS | MUSIC | INSTRUMENTAL | DIALOGUE | ORCHESTRAL | ELECTRONIC | ACOUSTIC")
+
+
+class PerceptionRequest(BaseModel):
+    processed_file_path: str
+    original_file_path: Optional[str] = None
+    reference_file_path: Optional[str] = None
+
+
+@app.post("/api/v1/intelligence/forensics")
+async def run_audio_forensics_agent(req: ForensicsRequest):
+    """Standalone Agent 01 (audio_forensics_agent): Hum, clicks, noise floor, clipping, phase & difficulty score."""
+    if not Path(req.file_path).exists():
+        raise HTTPException(status_code=404, detail="Source audio file not found")
+    res = await audio_forensics_agent.execute_task(AgentTask(agent_id="audio_forensics_agent", input_file_path=req.file_path))
+    return res.model_dump()
+
+
+@app.post("/api/v1/intelligence/studio-enhance")
+async def run_studio_enhancement_agent(req: StudioEnhanceRequest):
+    """Standalone Agent 03 (studio_enhancement_agent): 7 audio-category tonal engineering profiles."""
+    if not Path(req.file_path).exists():
+        raise HTTPException(status_code=404, detail="Source audio file not found")
+    res = await studio_enhancement_agent.execute_task(
+        AgentTask(agent_id="studio_enhancement_agent", input_file_path=req.file_path, processing_profile=req.category.upper())
+    )
+    return res.model_dump()
+
+
+@app.post("/api/v1/intelligence/perception")
+async def run_acoustic_perception_agent(req: PerceptionRequest):
+    """Standalone Agent 09 (acoustic_perception_agent): Original vs processed & reference track matching."""
+    if not Path(req.processed_file_path).exists():
+        raise HTTPException(status_code=404, detail="Processed audio file not found")
+    res = await acoustic_perception_agent.execute_task(
+        AgentTask(
+            agent_id="acoustic_perception_agent",
+            input_file_path=req.processed_file_path,
+            processing_parameters={
+                "original_file_path": req.original_file_path,
+                "reference_file_path": req.reference_file_path,
+            },
+        )
+    )
     return res.model_dump()

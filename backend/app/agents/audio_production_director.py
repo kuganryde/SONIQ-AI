@@ -485,6 +485,8 @@ class AudioProductionDirector:
             "hardware": hw,
             "execution_time_sec": elapsed,
             "qa_gate_report": qa_report_dict,
+            "perception_report": perc_res.processing_report,
+            "forensics_difficulty_score": forensics_report.get("restoration_difficulty_score"),
             "studio_enhancement_summary": summary["studio_enhancement_delta"],
             "stems": stems_info,
             "agent_results": agent_results,
